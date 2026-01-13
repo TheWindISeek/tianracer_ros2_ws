@@ -1,0 +1,24 @@
+[submodule "src/ackermann_msgs"]
+	path = src/ackermann_msgs
+	url = git@github.com:ros-drivers/ackermann_msgs.git
+	branch = ros2
+[submodule "src/librealsense"]
+	path = src/librealsense
+	url = git@github.com:IntelRealSense/librealsense.git
+	branch = master
+[submodule "src/osight_lidar_ros2"]
+	path = src/osight_lidar_ros2
+	url = git@github.com:TheWindISeek/osight_lidar_ros2.git
+	branch = dev
+[submodule "src/realsense-ros"]
+	path = src/realsense-ros
+	url = git@github.com:IntelRealSense/realsense-ros.git
+	branch = ros2-development
+[submodule "src/slam_toolbox"]
+	path = src/slam_toolbox
+	url = git@github.com:SteveMacenski/slam_toolbox.git
+	branch = master
+[submodule "src/tianbot_core_ros2"]
+	path = src/tianbot_core_ros2
+	url = git@github.com:TheWindISeek/tianbot_core_ros2.git
+	branch = dev
