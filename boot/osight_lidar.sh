@@ -1,0 +1,1 @@
+ros2 launch osight_lidar_ros2 osight_iexxx.launch.py 

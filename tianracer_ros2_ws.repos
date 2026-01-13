@@ -1,0 +1,37 @@
+repositories:
+  src/ackermann_msgs:
+    type: git
+    url: git@github.com:ros-drivers/ackermann_msgs.git
+    version: ros2
+    commit: 81a5f2d9ae1c1048216678b9dc3db6afc0cb815e
+
+  src/librealsense:
+    type: git
+    url: https://github.com/IntelRealSense/librealsense.git
+    version: v2.56.4
+    commit: 5af97a58423ec11822e8d951d37d9c6945a09a24
+
+  src/osight_lidar_ros2:
+    type: git
+    url: git@github.com:TheWindISeek/osight_lidar_ros2.git
+    version: dev
+    commit: bd8d9a350925decb4316ce6e4fd8bb3d430e28fc
+
+  src/realsense-ros:
+    type: git
+    url: https://github.com/IntelRealSense/realsense-ros.git
+    version: HEAD
+    commit: d9b512c94ba7342e1a9e869f9726bf69e734c741
+
+  src/slam_toolbox:
+    type: git
+    url: git@github.com:SteveMacenski/slam_toolbox.git
+    version: 2.6.10
+    commit: 8293d21fe5c816d0405e0cc1f3eb46c70659c267
+
+  src/tianbot_core_ros2:
+    type: git
+    url: git@github.com:TheWindISeek/tianbot_core_ros2.git
+    version: dev
+    commit: e18701799d9e037a6cd503c5529c124d295d0232
+
