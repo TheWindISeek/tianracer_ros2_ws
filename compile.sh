@@ -30,6 +30,7 @@ ALL_PACKAGES=(
   osight_lidar_ros2
   tianracer_teleop_ros2
   tianracer_slam_ros2
+  tianracer_bringup
 )
 
 # 在 Ubuntu 22.04 上可以通过 apt 安装的包（ROS2 Humble）
@@ -52,6 +53,7 @@ MUST_BUILD_PACKAGES=(
   osight_lidar_ros2
   tianracer_teleop_ros2
   tianracer_slam_ros2
+  tianracer_bringup
 )
 
 # 根据 Ubuntu 版本决定编译哪些包

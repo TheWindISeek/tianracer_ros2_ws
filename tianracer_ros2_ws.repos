@@ -35,3 +35,9 @@ repositories:
     version: dev
     commit: e18701799d9e037a6cd503c5529c124d295d0232
 
+  src/map2gazebo:
+    type: git
+    url: git@github.com:TheWindISeek/map2gazebo.git
+    version: foxy-devel
+    commit: d0ebd0a62d9ad953ac185519240db6a3ec0766d8
+
