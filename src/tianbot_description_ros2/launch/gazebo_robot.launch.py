@@ -42,6 +42,13 @@ def resolve_world_path(context, *args, **kwargs):
     return []
 
 
+def log_urdf_path(context, *args, **kwargs):
+    """在launch时打印解析后的URDF/Xacro路径"""
+    urdf_path = LaunchConfiguration('urdf_file').perform(context)
+    print(f"[gazebo_robot.launch] Using URDF file: {urdf_path}")
+    return []
+
+
 def generate_launch_description():
     # 获取包路径
     pkg_share = FindPackageShare(package='tianbot_description_ros2').find('tianbot_description_ros2')
@@ -87,6 +94,7 @@ def generate_launch_description():
         'urdf_file',
         # default_value=os.path.join(pkg_share, 'urdf', 'qingzhou.xacro'),
         default_value=os.path.join(pkg_share, 'urdf', 'tianracer.xacro'),
+        # default_value=os.path.join(pkg_share, 'urdf', 'tianbot_ackermann.urdf.xacro'),
         description='URDF/Xacro文件路径'
     )
     
@@ -142,7 +150,8 @@ def generate_launch_description():
         cmd=['gzclient'],
         output='screen'
     )
-    
+
+
     # 处理URDF文件
     robot_description_content = ParameterValue(
         Command(['xacro ', urdf_file]),
@@ -190,6 +199,7 @@ def generate_launch_description():
 
     # 解析world路径（在launch时执行）
     resolve_world = OpaqueFunction(function=resolve_world_path)
+    log_urdf = OpaqueFunction(function=log_urdf_path)
     
     # 设置GAZEBO_MODEL_PATH环境变量
     set_gazebo_model_path = SetEnvironmentVariable(
@@ -209,10 +219,10 @@ def generate_launch_description():
         yaw_arg,
         set_gazebo_model_path,  # 设置环境变量
         resolve_world,  # 先解析world路径
+        log_urdf,
         gzserver,
         gzclient,
         robot_state_publisher,
         joint_state_publisher,
         spawn_entity,
     ])
-

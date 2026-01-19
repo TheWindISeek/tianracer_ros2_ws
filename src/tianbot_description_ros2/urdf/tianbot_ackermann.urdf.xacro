@@ -8,6 +8,8 @@
 
   <xacro:property name="wheel_radius" value="0.065"/>
   <xacro:property name="wheel_width" value="0.04"/>
+  <xacro:property name="wheel_mass" value="3.0"/>
+  <xacro:property name="steering_mass" value="0.01"/>
 
   <!-- 轮子位置：前轮距前端6cm，后轮距后端4cm -->
   <xacro:property name="front_wheel_x" value="${chassis_length/2 - 0.06}"/>
@@ -22,14 +24,17 @@
   <!-- Base Footprint -->
   <link name="base_footprint"/>
 
+  <!-- Base Link -->
+  <link name="base_link"/>
+
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
     <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
   </joint>
 
-  <!-- Base Link -->
-  <link name="base_link">
+  <!-- Chassis Link -->
+  <link name="chassis_link">
     <visual>
       <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
       <geometry>
@@ -52,21 +57,32 @@
     </inertial>
   </link>
 
+  <joint name="chassis_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="chassis_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
   <!-- 前轮转向宏 -->
   <xacro:macro name="front_wheel" params="prefix reflect">
     <joint name="${prefix}_steer_joint" type="revolute">
-      <parent link="base_link"/>
+      <parent link="chassis_link"/>
       <child link="${prefix}_steer_link"/>
-      <origin xyz="${front_wheel_x} ${reflect*wheel_y} 0" rpy="0 0 0"/>
+      <origin xyz="${front_wheel_x} ${reflect*wheel_y} ${wheel_radius}" rpy="0 0 0"/>
       <axis xyz="0 0 1"/>
-      <limit lower="-0.5" upper="0.5" effort="100" velocity="2.0"/>
+      <!-- <limit lower="-0.6" upper="0.6" effort="-1.0" velocity="-1.0"/> -->
+      <limit lower="-0.6" upper="0.6" effort="100" velocity="-1.0"/>
     </joint>
 
     <link name="${prefix}_steer_link">
       <inertial>
-        <mass value="0.1"/>
+        <mass value="${steering_mass}"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+        <inertia ixx="${steering_mass/12*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+                 ixy="0" ixz="0"
+                 iyy="${steering_mass/12*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+                 iyz="0"
+                 izz="${steering_mass/2 * wheel_radius*wheel_radius}"/>
       </inertial>
     </link>
 
@@ -75,6 +91,8 @@
       <child link="${prefix}_wheel"/>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <axis xyz="0 1 0"/>
+      <dynamics damping="0.5" friction="0.8"/>
+      <!-- <limit lower="-3.14159" upper="3.14159" effort="200" velocity="-1"/> -->
     </joint>
 
     <link name="${prefix}_wheel">
@@ -94,9 +112,13 @@
         </geometry>
       </collision>
       <inertial>
-        <mass value="1.0"/>
+        <mass value="${wheel_mass}"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <inertia ixx="0.005" ixy="0" ixz="0" iyy="0.005" iyz="0" izz="0.005"/>
+        <inertia ixx="${wheel_mass/12*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+                 ixy="0" ixz="0"
+                 iyy="${wheel_mass/12*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+                 iyz="0"
+                 izz="${wheel_mass/2 * wheel_radius*wheel_radius}"/>
       </inertial>
     </link>
   </xacro:macro>
@@ -104,10 +126,12 @@
   <!-- 后轮宏 -->
   <xacro:macro name="rear_wheel" params="prefix reflect">
     <joint name="${prefix}_wheel_joint" type="continuous">
-      <parent link="base_link"/>
+      <parent link="chassis_link"/>
       <child link="${prefix}_wheel"/>
-      <origin xyz="${rear_wheel_x} ${reflect*wheel_y} 0" rpy="0 0 0"/>
+      <origin xyz="${rear_wheel_x} ${reflect*wheel_y} ${wheel_radius}" rpy="0 0 0"/>
       <axis xyz="0 1 0"/>
+      <dynamics damping="0.5" friction="0.8"/>
+      <!-- <limit lower="-3.14159" upper="3.14159" effort="70" velocity="-1"/> -->
     </joint>
 
     <link name="${prefix}_wheel">
@@ -127,45 +151,49 @@
         </geometry>
       </collision>
       <inertial>
-        <mass value="1.0"/>
+        <mass value="${wheel_mass}"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <inertia ixx="0.005" ixy="0" ixz="0" iyy="0.005" iyz="0" izz="0.005"/>
+        <inertia ixx="${wheel_mass/12*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+                 ixy="0" ixz="0"
+                 iyy="${wheel_mass/12*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+                 iyz="0"
+                 izz="${wheel_mass/2 * wheel_radius*wheel_radius}"/>
       </inertial>
     </link>
   </xacro:macro>
 
   <!-- 实例化轮子 -->
-  <xacro:front_wheel prefix="left_front" reflect="1"/>
-  <xacro:front_wheel prefix="right_front" reflect="-1"/>
-  <xacro:rear_wheel prefix="left_rear" reflect="1"/>
-  <xacro:rear_wheel prefix="right_rear" reflect="-1"/>
+  <xacro:front_wheel prefix="fr_left" reflect="1"/>
+  <xacro:front_wheel prefix="fr_right" reflect="-1"/>
+  <xacro:rear_wheel prefix="re_left" reflect="1"/>
+  <xacro:rear_wheel prefix="re_right" reflect="-1"/>
 
   <!-- Gazebo材质与摩擦配置 -->
-  <gazebo reference="base_link">
+  <gazebo reference="chassis_link">
     <material>Gazebo/White</material>
     <mu1>0.5</mu1>
     <mu2>0.5</mu2>
   </gazebo>
 
-  <gazebo reference="left_front_wheel">
+  <gazebo reference="fr_left_wheel">
     <material>Gazebo/Grey</material>
     <mu1>150.0</mu1>
     <mu2>10.0</mu2>
   </gazebo>
 
-  <gazebo reference="right_front_wheel">
+  <gazebo reference="fr_right_wheel">
     <material>Gazebo/Grey</material>
     <mu1>150.0</mu1>
     <mu2>10.0</mu2>
   </gazebo>
 
-  <gazebo reference="left_rear_wheel">
+  <gazebo reference="re_left_wheel">
     <material>Gazebo/Grey</material>
     <mu1>150.0</mu1>
     <mu2>10.0</mu2>
   </gazebo>
 
-  <gazebo reference="right_rear_wheel">
+  <gazebo reference="re_right_wheel">
     <material>Gazebo/Grey</material>
     <mu1>150.0</mu1>
     <mu2>10.0</mu2>
@@ -177,7 +205,7 @@
 
   <!-- 摄像头：前轮水平位置，宽度一半处 -->
   <joint name="camera_joint" type="fixed">
-    <parent link="base_link"/>
+    <parent link="chassis_link"/>
     <child link="camera_link"/>
     <origin xyz="${front_wheel_x} 0 ${chassis_height}" rpy="0 0 0"/>
   </joint>
@@ -204,7 +232,7 @@
 
   <!-- 雷达：摄像头往后3cm -->
   <joint name="laser_joint" type="fixed">
-    <parent link="base_link"/>
+    <parent link="chassis_link"/>
     <child link="laser_link"/>
     <origin xyz="${front_wheel_x - 0.03} 0 ${chassis_height}" rpy="0 0 0"/>
   </joint>
@@ -273,7 +301,7 @@
   </gazebo>
 
   <joint name="imu_joint" type="fixed">
-    <parent link="base_link"/>
+    <parent link="chassis_link"/>
     <child link="imu_link"/>
     <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
   </joint>
@@ -393,7 +421,7 @@
 
   <joint name="virtual_steering_wheel_joint" type="revolute">
     <origin xyz="${-chassis_length/2 + 0.1} 0.0 0.0" rpy="0.0 0.0 0.0"/>
-    <parent link="base_link"/>
+    <parent link="chassis_link"/>
     <child link="virtual_steer_link"/>
     <axis xyz="-1 0 0"/>
     <limit lower="-3" upper="3" effort="200" velocity="20"/>
@@ -403,12 +431,12 @@
     <plugin name="gazebo_ros_joint_state_publisher"
             filename="libgazebo_ros_joint_state_publisher.so">
       <update_rate>100</update_rate>
-      <joint_name>right_front_steer_joint</joint_name>
-      <joint_name>right_front_wheel_joint</joint_name>
-      <joint_name>left_front_steer_joint</joint_name>
-      <joint_name>left_front_wheel_joint</joint_name>
-      <joint_name>right_rear_wheel_joint</joint_name>
-      <joint_name>left_rear_wheel_joint</joint_name>
+      <joint_name>fr_right_steer_joint</joint_name>
+      <joint_name>fr_right_wheel_joint</joint_name>
+      <joint_name>fr_left_steer_joint</joint_name>
+      <joint_name>fr_left_wheel_joint</joint_name>
+      <joint_name>re_right_wheel_joint</joint_name>
+      <joint_name>re_left_wheel_joint</joint_name>
       <joint_name>virtual_steering_wheel_joint</joint_name>
     </plugin>
   </gazebo>
@@ -433,12 +461,12 @@
       <update_rate>100.0</update_rate>
 
       <!-- wheels -->
-      <front_left_joint>left_front_wheel_joint</front_left_joint>
-      <front_right_joint>right_front_wheel_joint</front_right_joint>
-      <rear_left_joint>left_rear_wheel_joint</rear_left_joint>
-      <rear_right_joint>right_rear_wheel_joint</rear_right_joint>
-      <left_steering_joint>left_front_steer_joint</left_steering_joint>
-      <right_steering_joint>right_front_steer_joint</right_steering_joint>
+      <front_left_joint>fr_left_wheel_joint</front_left_joint>
+      <front_right_joint>fr_right_wheel_joint</front_right_joint>
+      <rear_left_joint>re_left_wheel_joint</rear_left_joint>
+      <rear_right_joint>re_right_wheel_joint</rear_right_joint>
+      <left_steering_joint>fr_left_steer_joint</left_steering_joint>
+      <right_steering_joint>fr_right_steer_joint</right_steering_joint>
       <steering_wheel_joint>virtual_steering_wheel_joint</steering_wheel_joint>
 
       <!-- Max absolute steer angle for tyre in radians-->
