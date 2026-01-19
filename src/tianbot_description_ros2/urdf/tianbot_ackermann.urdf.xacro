@@ -92,7 +92,7 @@
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <axis xyz="0 1 0"/>
       <dynamics damping="0.5" friction="0.8"/>
-      <!-- <limit lower="-3.14159" upper="3.14159" effort="200" velocity="-1"/> -->
+      <limit lower="-3.14159" upper="3.14159" effort="200" velocity="-1"/>
     </joint>
 
     <link name="${prefix}_wheel">
@@ -131,7 +131,7 @@
       <origin xyz="${rear_wheel_x} ${reflect*wheel_y} ${wheel_radius}" rpy="0 0 0"/>
       <axis xyz="0 1 0"/>
       <dynamics damping="0.5" friction="0.8"/>
-      <!-- <limit lower="-3.14159" upper="3.14159" effort="70" velocity="-1"/> -->
+      <limit lower="-3.14159" upper="3.14159" effort="70" velocity="-1"/>
     </joint>
 
     <link name="${prefix}_wheel">

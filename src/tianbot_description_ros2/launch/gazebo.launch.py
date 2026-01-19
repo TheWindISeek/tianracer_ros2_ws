@@ -38,7 +38,7 @@ def generate_launch_description():
     
     # 启动gazebo服务器(gzserver)
     # 构建命令：如果world为空，只启动gzserver，否则加载world文件
-    gzserver_cmd = ['gzserver', '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so']
+    gzserver_cmd = ['gzserver', '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so', '--verbose']
     
     # 使用ExecuteProcess，world参数会自动处理（如果为空字符串，gzserver会使用默认空world）
     gzserver = ExecuteProcess(
