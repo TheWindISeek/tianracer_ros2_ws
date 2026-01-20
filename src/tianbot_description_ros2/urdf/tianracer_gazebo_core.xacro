@@ -3,7 +3,7 @@
     <!-- GAZEBO COLOUR -->
     <!-- Gazebo is unable to use the same <material> tags that are already in the URDF (that RViz uses). -->
     <!-- Instead, we need to add gazebo tags for our links that refer to Gazebo materials -->
-    <gazebo reference="chassis_link">
+    <gazebo reference="base_link">
         <material>Gazebo/White</material>
         <mu1>0.5</mu1>
         <mu2>0.5</mu2>
@@ -72,15 +72,15 @@
         </sensor>
     </gazebo>
 
-    <!-- LIDAR -->
-    <gazebo reference="lidar_link">
+    <!-- LASER -->
+    <gazebo reference="laser_link">
         <material>Gazebo/Black</material>
         <mu1>1.0</mu1>
         <mu2>1.0</mu2>
     </gazebo>
 
-    <gazebo reference="lidar_link">
-        <sensor name="lidar_sensor" type="gpu_ray">
+    <gazebo reference="laser_link">
+        <sensor name="laser_sensor" type="gpu_ray">
             <always_on>true</always_on>
             <visualize>true</visualize>
             <update_rate>50</update_rate>
@@ -106,12 +106,12 @@
                 </noise>
             </ray>
 
-            <plugin name="lidarscan" filename="libgazebo_ros_ray_sensor.so">
+            <plugin name="laserscan" filename="libgazebo_ros_ray_sensor.so">
                 <ros>
                     <remapping>~/out:=scan</remapping>
                 </ros>
                 <output_type>sensor_msgs/LaserScan</output_type>
-                <frame_name>lidar_link</frame_name>
+                <frame_name>laser_link</frame_name>
             </plugin>
         </sensor>
     </gazebo>
@@ -298,7 +298,7 @@
     </link>
     <joint name="virtual_steering_wheel_joint" type="revolute">
         <origin xyz="-0.32 0.0 0.0" rpy="0.0 0.0 0.0" />
-        <parent link="chassis_link" />
+        <parent link="base_link" />
         <child link="virtual_steer_link" />
         <axis xyz="-1 0 0" />
         <limit lower="-3" upper="3" effort="200" velocity="20" />

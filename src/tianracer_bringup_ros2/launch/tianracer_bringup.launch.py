@@ -97,6 +97,11 @@ def generate_launch_description():
         default_value='true',
         description='Publish TF transforms'
     )
+    tianbot_yaw_offset_arg = DeclareLaunchArgument(
+        'yaw_offset_deg',
+        default_value='-28.67',
+        description='Odom yaw offset in degrees (steering calibration)'
+    )
 
     # ========== 启动 Lidar ==========
     lidar_launch = IncludeLaunchDescription(
@@ -151,6 +156,7 @@ def generate_launch_description():
             'type': LaunchConfiguration('tianbot_type'),
             'type_verify': LaunchConfiguration('tianbot_type_verify'),
             'publish_tf': LaunchConfiguration('tianbot_publish_tf'),
+            'yaw_offset_deg': LaunchConfiguration('yaw_offset_deg'),
         }.items()
     )
 
@@ -177,7 +183,8 @@ def generate_launch_description():
         tianbot_type_arg,
         tianbot_type_verify_arg,
         tianbot_publish_tf_arg,
-        
+        tianbot_yaw_offset_arg,
+
         # 启动三个节点
         lidar_launch,
         realsense_launch,

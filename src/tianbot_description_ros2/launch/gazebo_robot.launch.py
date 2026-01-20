@@ -106,13 +106,13 @@ def generate_launch_description():
     
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='0.0',
+        default_value='0.5',
         description='机器人初始X坐标（世界原点）'
     )
-    
+
     y_arg = DeclareLaunchArgument(
         'y',
-        default_value='5.0',
+        default_value='0.5',
         description='机器人初始Y坐标（世界原点）'
     )
     
@@ -124,8 +124,8 @@ def generate_launch_description():
     
     yaw_arg = DeclareLaunchArgument(
         'yaw',
-        default_value='-0.5',  # 向右偏（约-17度，顺时针），修正初始位置偏左的问题
-        description='机器人初始Yaw角度（弧度），负值表示向右偏'
+        default_value='0.0',  # 默认朝向 0，和 Nav2 初始位姿一致
+        description='机器人初始Yaw角度（弧度）'
     )
     
     use_sim_time = LaunchConfiguration('use_sim_time')

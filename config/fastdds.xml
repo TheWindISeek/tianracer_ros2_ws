@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    <participant profile_name="participant_profile" is_default_profile="true">
+        <rtps>
+            <builtin>
+                <discovery_config>
+                    <leaseDuration>
+                        <sec>DURATION_INFINITY</sec>
+                    </leaseDuration>
+                    <leaseAnnouncement>
+                        <sec>5</sec>
+                    </leaseAnnouncement>
+                </discovery_config>
+            </builtin>
+        </rtps>
+    </participant>
+</profiles>
