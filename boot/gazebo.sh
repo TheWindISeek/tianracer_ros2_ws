@@ -1,0 +1,1 @@
+ros2 launch tianbot_description_ros2 gazebo_robot.launch.py x:=0.5 y:=0.5 world:=/home/lucifer/tianracer_ros2_ws/world/lab.sdf

@@ -2,11 +2,11 @@
 
 map_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
 
 amcl:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     min_particles: 500
     max_particles: 2000
     kld_err: 0.05
@@ -14,7 +14,7 @@ amcl:
     update_min_d: 0.2
     update_min_a: 0.5
     resample_interval: 1
-    transform_tolerance: 1.0
+    transform_tolerance: 5.0
     recovery_alpha_slow: 0.0
     recovery_alpha_fast: 0.0
     initial_pose_x: 0.5
@@ -48,7 +48,7 @@ amcl:
 
 bt_navigator:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     global_frame: "map"
     robot_base_frame: "base_link"
     odom_topic: "/odom"
@@ -104,7 +104,7 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
@@ -122,19 +122,22 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      # 适当放宽终点容差，减少原地抖动和原地转圈
+      xy_goal_tolerance: 0.35
+      yaw_goal_tolerance: 0.35
 
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
-      min_vel_x: -0.1
+      # 线速度采样范围（真车，正向为前进，负向为倒车）
+      min_vel_x: -0.3
       min_vel_y: 0.0
-      max_vel_x: 0.5
+      max_vel_x: 0.6
       max_vel_y: 0.0
       max_vel_theta: 1.0
-      min_speed_xy: 0.0
-      max_speed_xy: 0.5
+      # 速度模长下限，避免长期选中“几乎静止”的轨迹
+      min_speed_xy: 0.05
+      max_speed_xy: 0.6
       min_speed_theta: 0.0
       acc_lim_x: 1.0
       acc_lim_y: 0.0
@@ -147,28 +150,29 @@ controller_server:
       sim_time: 2.0
       linear_granularity: 0.05
       angular_granularity: 0.025
-      transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
+      transform_tolerance: 5.0
+      xy_goal_tolerance: 0.35
       trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "ObstacleFootprint", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
       BaseObstacle.scale: 0.02
       ObstacleFootprint.scale: 1.0
-      PathAlign.scale: 32.0
+      # 略微降低各 critic 权重，减少只在原地转的倾向
+      PathAlign.scale: 24.0
       PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
+      GoalAlign.scale: 18.0
       GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
+      PathDist.scale: 24.0
+      GoalDist.scale: 16.0
+      RotateToGoal.scale: 16.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
       Oscillation.scale: 10.0
 
 planner_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     expected_planner_frequency: 20.0
     planner_plugins: ["GridBased"]
 
@@ -180,7 +184,7 @@ planner_server:
 
 behavior_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: False
     costmap_topic: "local_costmap/costmap_raw"
     footprint_topic: "local_costmap/published_footprint"
     cycle_frequency: 10.0
@@ -193,7 +197,7 @@ behavior_server:
       plugin: "nav2_behaviors/Wait"
     global_frame: "odom"
     robot_base_frame: "base_link"
-    transform_tolerance: 0.1
+    transform_tolerance: 5.0
 
 local_costmap:
   local_costmap:
@@ -202,18 +206,21 @@ local_costmap:
       publish_frequency: 2.0
       global_frame: "odom"
       robot_base_frame: "base_link"
-      use_sim_time: True
+      use_sim_time: False
+      transform_tolerance: 5.0
       rolling_window: true
       width: 3
       height: 3
       resolution: 0.05
-      robot_radius: 0.22
+      # 机器人半径（单位：米），先适当调小一点，避免一启动就整车泡在障碍/膨胀区
+      robot_radius: 0.18
       plugins: ["voxel_layer", "inflation_layer"]
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        # 膨胀半径，单位：米。必须大于等于机器人的内切半径（0.186m），建议设置为 0.25m 之前是0.05m
+        inflation_radius: 0.25
 
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
@@ -245,7 +252,8 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: "map"
       robot_base_frame: "base_link"
-      use_sim_time: True
+      use_sim_time: False
+      transform_tolerance: 5.0
       robot_radius: 0.22
       resolution: 0.05
       track_unknown_space: false
@@ -273,6 +281,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        # 全局图膨胀半径，单位：米。必须大于等于机器人的内切半径（0.225m），建议设置为 0.30m 之前是0.05m
+        inflation_radius: 0.30
 
       always_send_full_costmap: True

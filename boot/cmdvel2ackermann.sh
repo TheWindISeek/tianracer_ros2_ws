@@ -1,1 +1,2 @@
+# ros2 launch tianracer_teleop_ros2 cmd_vel_to_ackermann.launch.py output_topic:=/ackermann_cmd steering_offset_degrees:=0.0
 ros2 launch tianracer_teleop_ros2 cmd_vel_to_ackermann.launch.py output_topic:=/ackermann_cmd steering_offset_degrees:=-28.67

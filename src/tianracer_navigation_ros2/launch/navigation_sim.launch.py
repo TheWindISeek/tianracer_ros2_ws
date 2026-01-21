@@ -130,6 +130,21 @@ def generate_launch_description():
         ]
     )
 
+    # 静态TF发布器：base_footprint -> base_link (根据URDF定义，z偏移为轮子半径0.065m)
+    static_tf_base_footprint_to_base_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_base_footprint_to_base_link',
+        arguments=['--x', '0', '--y', '0', '--z', '0.065', '--roll', '0', '--pitch', '0', '--yaw', '0', '--frame-id', 'base_footprint', '--child-frame-id', 'base_link'],
+        parameters=[{'use_sim_time': True}]
+    )
+
+    # 9s: 静态TF发布器 (在AMCL之后启动)
+    static_tf_publisher = TimerAction(
+        period=9.0,
+        actions=[static_tf_base_footprint_to_base_link]
+    )
+
     # 10s: Lifecycle Manager - 等待所有节点完全启动后再激活
     lifecycle_manager = TimerAction(
         period=10.0,
@@ -168,5 +183,6 @@ def generate_launch_description():
         planner_node,
         behavior_node,
         bt_navigator_node,
+        static_tf_publisher,
         lifecycle_manager,
     ])
