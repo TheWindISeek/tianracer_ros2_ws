@@ -38,7 +38,6 @@ def generate_launch_description():
             'use_sim_time': LaunchConfiguration('use_sim_time'),
         }],
         remappings=[
-            ('/odom', '/odometry/filtered'),
             ('/imu', '/tianracer/imu'),
         ]
     )
@@ -54,10 +53,37 @@ def generate_launch_description():
             'use_sim_time': LaunchConfiguration('use_sim_time'),
         }]
     )
-    
+
+    # Static TF: base_link -> base_footprint
+    base_link_to_base_footprint = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_link_to_base_footprint_tf',
+        arguments=['--x', '0', '--y', '0', '--z', '0', '--roll', '0', '--pitch', '0', '--yaw', '0', '--frame-id', 'base_link', '--child-frame-id', 'base_footprint'],
+    )
+
+    # Static TF: base_link -> lidar (激光雷达的 frame_id)
+    base_link_to_lidar = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_link_to_lidar_tf',
+        arguments=['--x', '0.15', '--y', '0', '--z', '0.1', '--roll', '0', '--pitch', '0', '--yaw', '0', '--frame-id', 'base_link', '--child-frame-id', 'lidar'],
+    )
+
+    # Static TF: base_link -> camera_link (相机在 lidar 前面约 3cm)
+    base_link_to_camera = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_link_to_camera_tf',
+        arguments=['--x', '0.18', '--y', '0', '--z', '0.1', '--roll', '0', '--pitch', '0', '--yaw', '0', '--frame-id', 'base_link', '--child-frame-id', 'camera_link'],
+    )
+
     return LaunchDescription([
         use_sim_time_arg,
         configuration_basename_arg,
+        base_link_to_base_footprint,
+        base_link_to_lidar,
+        base_link_to_camera,
         cartographer_node,
         cartographer_occupancy_grid_node,
     ])

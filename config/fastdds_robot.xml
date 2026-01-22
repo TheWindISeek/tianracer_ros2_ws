@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    <participant profile_name="participant_profile" is_default_profile="true">
+        <rtps>
+            <builtin>
+                <initialPeersList>
+                    <locator>
+                        <udpv4>
+                            <!-- 电脑的 IP 地址 -->
+                            <address>192.168.1.240</address>
+                        </udpv4>
+                    </locator>
+                </initialPeersList>
+            </builtin>
+        </rtps>
+    </participant>
+</profiles>

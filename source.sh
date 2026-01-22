@@ -9,6 +9,8 @@ if [ "$USER" = "lucifer" ]; then
     source /opt/ros/humble/local_setup.bash
     source ~/ros2_humble/install/local_setup.bash
     source ~/nav2_ws/install/local_setup.bash
+    # export FASTRTPS_DEFAULT_PROFILES_FILE=$HOME/tianracer_ros2_ws/config/fastdds_host.
+    export FASTRTPS_DEFAULT_PROFILES_FILE=$HOME/tianracer_ros2_ws/config/fastdds.xml
 else
     # 其他用户的配置
     source ~/ros2_humble/install/local_setup.bash 
@@ -18,11 +20,19 @@ else
     source ~/diagnostics_ws/install/local_setup.bash 
     source ~/bond_ws/install/local_setup.bash 
     source ~/angles_ws/install/local_setup.bash 
+    # export FASTRTPS_DEFAULT_PROFILES_FILE=$HOME/tianracer_ros2_ws/config/fastdds_robot.
+    export FASTRTPS_DEFAULT_PROFILES_FILE=$HOME/tianracer_ros2_ws/config/fastdds.xml
 fi
 
 # 添加 Gazebo 模型路径
 # export GAZEBO_MODEL_PATH=/home/lucifer/.gazebo/models:/home/lucifer/Codes/gazebo_models:/home/lucifer/Codes/ros2_warehouse_amr/src/ros2_warehouse_amr/models:/home/lucifer/Codes/ros2_warehouse_amr/src/ros2_warehouse_amr/worlds:$GAZEBO_MODEL_PATH
 export TURTLEBOT3_MODEL=waffle
 export GAZEBO_MODEL_PATH=$HOME/tianracer_ros2_ws/models:$HOME/tianracer_ros2_ws/src/map2gazebo/models:/home/lucifer/.gazebo/models:/home/lucifer/Codes/gazebo_models:/home/lucifer/Codes/ros2_warehouse_amr/src/ros2_warehouse_amr/models:/home/lucifer/Codes/ros2_warehouse_amr/src/ros2_warehouse_amr/worlds::/opt/ros/humble/share/turtlebot3_gazebo/models:/opt/ros/humble/share/turtlebot3_gazebo/models:/usr/share/gazebo-11/models:/opt/ros/humble/share/turtlebot3_gazebo/models:$GAZEBO_MODEL_PATH
-export FASTRTPS_DEFAULT_PROFILES_FILE=$HOME/tianracer_ros2_ws/config/fastdds.xml
+
+
+# 设置 ROS_DOMAIN_ID（用于跨设备通信）
+# 确保小车和电脑使用相同的 ROS_DOMAIN_ID 才能通信
+# 如果未设置，默认值为 0
+export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+
 source install/local_setup.bash

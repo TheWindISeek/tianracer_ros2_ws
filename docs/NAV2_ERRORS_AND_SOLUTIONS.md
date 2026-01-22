@@ -292,7 +292,6 @@ A:
 
 ## 参考文档
 
-- [Nav2 官方文档](https://navigation.ros.org/)
-- [AMCL 配置指南](https://navigation.ros.org/configuration/packages/configuring-amcl.html)
-- [Nav2 参数调优](https://navigation.ros.org/tutorials/docs/navigation2_configuration_guide.html)
+- [Nav2 官方文档](https://docs.nav2.org/)
+- [AMCL 配置指南](https://docs.nav2.org/configuration/packages/configuring-amcl.html)
 
