@@ -36,7 +36,8 @@ def resolve_world_path(context, *args, **kwargs):
     # 检查文件是否存在
     if world_path and not os.path.exists(world_path):
         print(f"Warning: World file not found: {world_path}")
-    
+
+    print(f"[gazebo_robot.launch] Using world file: {world_path}")
     # 更新launch配置
     context.launch_configurations['world'] = world_path
     return []
@@ -170,16 +171,6 @@ def generate_launch_description():
         }]
     )
     
-    # Joint State Publisher (用于Gazebo仿真)
-    joint_state_publisher = Node(
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        name='joint_state_publisher',
-        output='screen',
-        parameters=[{
-            'use_sim_time': use_sim_time,
-        }]
-    )
     
     # 在Gazebo中生成机器人实体
     spawn_entity = Node(
@@ -223,6 +214,5 @@ def generate_launch_description():
         gzserver,
         gzclient,
         robot_state_publisher,
-        joint_state_publisher,
         spawn_entity,
     ])
