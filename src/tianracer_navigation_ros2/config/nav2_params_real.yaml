@@ -94,13 +94,15 @@ amcl:
     recovery_alpha_fast: 0.0
 
     # ===== 初始位姿参数 =====
-    # initial_pose_x/y/a: 初始位置和朝向
+    # initial_pose.x/y/yaw: 初始位置和朝向
     # - 作用：AMCL 启动时的初始位姿估计
     # - 影响：影响定位收敛速度，不准确会导致定位失败
     # - 调优：应在 RViz2 中使用 "2D Pose Estimate" 设置，这里仅作备用
-    initial_pose_x: 0.5
-    initial_pose_y: 0.5
-    initial_pose_a: 0.0
+    initial_pose:
+      x: 1.0
+      y: 1.7
+      yaw: 3.138
+      z: 0.0
 
     # initial_cov_xx/yy/aa: 初始位姿协方差
     # - 作用：初始位姿的不确定性（xx/yy 是位置，aa 是角度）
@@ -689,7 +691,7 @@ planner_server:
       # - 作用：允许的路径终点与目标点的距离误差
       # - 影响：值越大越容易找到路径，但可能不够精确
       # - 调优：一般 0.3-1.0 米，精确要求时减小到 0.1-0.3
-      tolerance: 0.5
+      tolerance: 1.0
 
       # use_astar: 是否使用 A* 算法
       # - 作用：True 使用 A*，False 使用 Dijkstra
@@ -739,11 +741,21 @@ behavior_server:
     # ===== 旋转行为配置 =====
     spin:
       plugin: "nav2_behaviors/Spin"
-      # 注意：具体参数在 behavior_server 的配置中设置
-      # 如需调整，可添加以下参数：
-      # - simulated_award_time: 模拟时间（秒）
-      # - max_rotational_vel: 最大旋转速度（rad/s）
-      # - min_rotational_vel: 最小旋转速度（rad/s）
+      # simulate_ahead_time: 模拟时间（秒）
+      # - 作用：预测旋转行为的时间范围
+      # - 影响：值越大预测越远但计算量越大
+      # - 调优：一般 2.0-5.0 秒
+      simulate_ahead_time: 2.0
+      # max_rotational_vel: 最大旋转速度（rad/s）
+      # - 作用：旋转时的最大角速度
+      # - 影响：值越大旋转越快但可能不稳定
+      # - 调优：一般 0.5-1.5 rad/s
+      max_rotational_vel: 1.0
+      # min_rotational_vel: 最小旋转速度（rad/s）
+      # - 作用：旋转时的最小角速度
+      # - 影响：值太小可能无法完成旋转
+      # - 调优：一般 0.2-0.5 rad/s
+      min_rotational_vel: 0.4
 
     # ===== 后退行为配置 =====
     backup:
@@ -829,8 +841,8 @@ local_costmap:
       # - 作用：局部代价地图的宽度和高度
       # - 影响：值越大覆盖范围越大但计算量越大
       # - 调优：一般 3-10 米，高速机器人建议 5-10 米
-      width: 3
-      height: 3
+      width: 5
+      height: 5
 
       # resolution: 分辨率（米/像素）
       # - 作用：每个像素代表的实际距离
@@ -871,16 +883,15 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         # cost_scaling_factor: 代价缩放因子
         # - 作用：控制障碍物周围代价的衰减速度
-        # - 影响：值越大衰减越快，安全距离越大但可能过于保守
-        # - 调优：一般 2.0-5.0，需要更大安全距离时增大
-        cost_scaling_factor: 3.0
+        # - 影响：值越大衰减越快，代价在短距离内快速降低
+        # - 调优：设为 80.0 让代价在 5cm 内衰减到接近 0
+        cost_scaling_factor: 80.0
 
         # inflation_radius: 膨胀半径（米）
         # - 作用：障碍物周围产生代价的区域半径
-        # - 影响：值越大安全距离越大，但可能无法通过狭窄通道
-        # - 调优：必须 ≥ 机器人内切半径（0.186m），建议 0.25-0.5 米
-        # - 注意：过小会导致碰撞风险，过大可能导致无法规划路径
-        inflation_radius: 0.25
+        # - 影响：设为 0.05m，配合高衰减因子，5cm 外代价接近 0
+        # - 调优：极小膨胀 + 超快衰减，让狭窄通道可通行
+        inflation_radius: 0.05
 
       # ===== 体素图层配置 =====
       voxel_layer:
@@ -915,17 +926,24 @@ local_costmap:
         # - 调优：一般 10-20，检测高度 = z_resolution × z_voxels
         z_voxels: 16
 
+        # min_obstacle_height: 最小障碍物高度（米）
+        # - 作用：低于此高度的障碍物被忽略（过滤地面反射和低矮噪声）
+        # - 影响：值越大过滤越多，但可能漏检低矮障碍物
+        # - 调优：设为 0.1-0.2 米可过滤大部分地面噪声
+        min_obstacle_height: 0.15
+
         # max_obstacle_height: 最大障碍物高度（米）
         # - 作用：超过此高度的障碍物被忽略
         # - 影响：值越大检测范围越大但可能误检测
         # - 调优：根据机器人高度设置（一般 1.5-3.0 米）
-        max_obstacle_height: 2.0
+        max_obstacle_height: 1.5
 
         # mark_threshold: 标记阈值
         # - 作用：体素被标记为障碍物所需的最小占用数
         # - 影响：值越大越不容易标记障碍物，但更稳定
         # - 调优：一般 0（任何占用都标记），噪声大可设为 1-2
-        mark_threshold: 0
+        # - 设为 1 可过滤单次噪声检测
+        mark_threshold: 1
 
         # observation_sources: 观测源列表
         # - 作用：指定使用的传感器数据源
@@ -985,9 +1003,9 @@ local_costmap:
 
           # obstacle_min_range: 障碍物检测最小距离（米）
           # - 作用：标记障碍物时的最小检测距离
-          # - 影响：通常设为 0.0
-          # - 调优：一般保持 0.0，不需要修改
-          obstacle_min_range: 0.0
+          # - 影响：过滤掉太近的噪声（如机器人自身、地面反射）
+          # - 调优：设为机器人半径左右，过滤近距离噪声
+          obstacle_min_range: 0.35
 
       # always_send_full_costmap: 是否总是发送完整代价地图
       # - 作用：True 时每次更新都发送完整地图，False 时只发送变化部分
@@ -1084,6 +1102,17 @@ global_costmap:
         # - 调优：必须设为 True，不要修改
         enabled: True
 
+        # min_obstacle_height: 最小障碍物高度（米）
+        # - 作用：低于此高度的障碍物被忽略（过滤地面反射）
+        # - 影响：值越大过滤越多，但可能漏检低矮障碍物
+        # - 调优：设为 0.1-0.2 米可过滤大部分地面噪声
+        min_obstacle_height: 0.25
+
+        # max_obstacle_height: 最大障碍物高度（米）
+        # - 作用：超过此高度的障碍物被忽略
+        # - 影响：值越大检测范围越大但可能误检测高处反射
+        max_obstacle_height: 2.0
+
         # observation_sources: 观测源列表
         # - 作用：指定使用的传感器数据源
         # - 影响：可添加多个传感器（如 scan, pointcloud）
@@ -1098,11 +1127,15 @@ global_costmap:
           # - 调优：根据实际激光雷达话题修改（如 "/scan"）
           topic: "/scan"
 
+          # min_obstacle_height: 最小障碍物高度（米）
+          # - 作用：低于此高度的激光点被忽略
+          min_obstacle_height: 0.15
+
           # max_obstacle_height: 最大障碍物高度（米）
           # - 作用：激光数据中超过此高度的点被忽略
           # - 影响：值越大检测范围越大但可能误检测
           # - 调优：根据机器人高度设置（一般 1.5-3.0 米）
-          max_obstacle_height: 2.0
+          max_obstacle_height: 1.5
 
           # clearing: 是否用于清除障碍物
           # - 作用：True 时激光数据可用于清除已标记的障碍物
@@ -1142,9 +1175,9 @@ global_costmap:
 
           # obstacle_min_range: 障碍物检测最小距离（米）
           # - 作用：标记障碍物时的最小检测距离
-          # - 影响：通常设为 0.0
-          # - 调优：一般保持 0.0，不需要修改
-          obstacle_min_range: 0.0
+          # - 影响：过滤掉太近的噪声（如机器人自身、地面反射）
+          # - 调优：设为机器人半径左右，过滤近距离噪声
+          obstacle_min_range: 0.35
 
       # ===== 静态图层配置 =====
       static_layer:
@@ -1160,17 +1193,15 @@ global_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         # cost_scaling_factor: 代价缩放因子
         # - 作用：控制障碍物周围代价的衰减速度
-        # - 影响：值越大衰减越快，安全距离越大但可能过于保守
-        # - 调优：一般 2.0-5.0，需要更大安全距离时增大
-        cost_scaling_factor: 3.0
+        # - 影响：值越大衰减越快，代价在短距离内快速降低
+        # - 调优：设为 80.0 让代价在 5cm 内衰减到接近 0
+        cost_scaling_factor: 80.0
 
         # inflation_radius: 膨胀半径（米）
         # - 作用：障碍物周围产生代价的区域半径
-        # - 影响：值越大安全距离越大，但可能无法通过狭窄通道
-        # - 调优：必须 ≥ 机器人内切半径（0.225m），建议 0.30-0.50 米
-        # - 注意：过小会导致碰撞风险，过大可能导致无法规划路径
-        # - 注意：全局地图的膨胀半径通常略大于局部地图（考虑全局规划安全）
-        inflation_radius: 0.30
+        # - 影响：设为 0.05m，配合高衰减因子，5cm 外代价接近 0
+        # - 调优：极小膨胀 + 超快衰减，让狭窄通道可通行
+        inflation_radius: 0.05
 
       # always_send_full_costmap: 是否总是发送完整代价地图
       # - 作用：True 时每次更新都发送完整地图，False 时只发送变化部分

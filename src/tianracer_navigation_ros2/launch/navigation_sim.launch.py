@@ -18,7 +18,7 @@ Tianracer Nav2 仿真导航启动脚本
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node, LifecycleNode
 from launch_ros.substitutions import FindPackageShare
 
@@ -26,16 +26,16 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     pkg_share = FindPackageShare('tianracer_navigation_ros2').find('tianracer_navigation_ros2')
 
-    default_params_file = PathJoinSubstitution([pkg_share, 'config', 'nav2_params_sim.yaml'])
-    default_map_path = '/home/lucifer/tianracer_ros2_ws/maps/my_map.yaml'
+    default_params_file = PathJoinSubstitution([pkg_share, 'config', 'nav2_params_real.yaml'])
+    default_map_path = '/home/lucifer/tianracer_ros2_ws/maps/newfull_map.yaml'
 
     # Launch 参数声明
     map_file_arg = DeclareLaunchArgument('map_file', default_value=default_map_path)
     params_file_arg = DeclareLaunchArgument('params_file', default_value=default_params_file)
     # 默认值和 gazebo_robot.launch.py 保持一致
-    initial_x_arg = DeclareLaunchArgument('initial_x', default_value='0.5')
-    initial_y_arg = DeclareLaunchArgument('initial_y', default_value='0.5')
-    initial_yaw_arg = DeclareLaunchArgument('initial_yaw', default_value='0.0')  # 和 Gazebo 默认 yaw 一致
+    initial_x_arg = DeclareLaunchArgument('initial_x', default_value='1')
+    initial_y_arg = DeclareLaunchArgument('initial_y', default_value='1.7')
+    initial_yaw_arg = DeclareLaunchArgument('initial_yaw', default_value='3.138')  # 和 Gazebo 默认 yaw 一致
 
     params_file = LaunchConfiguration('params_file')
     map_file = LaunchConfiguration('map_file')
@@ -64,9 +64,9 @@ def generate_launch_description():
                 namespace='',
                 output='screen',
                 parameters=[params_file, {
-                    'initial_pose_x': initial_x,
-                    'initial_pose_y': initial_y,
-                    'initial_pose_a': initial_yaw,
+                    'initial_pose.x': PythonExpression(['float(', initial_x, ')']),
+                    'initial_pose.y': PythonExpression(['float(', initial_y, ')']),
+                    'initial_pose.yaw': PythonExpression(['float(', initial_yaw, ')']),
                     'set_initial_pose': True,
                 }]
             )

@@ -2,6 +2,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
@@ -99,8 +100,8 @@ def generate_launch_description():
     )
     tianbot_yaw_offset_arg = DeclareLaunchArgument(
         'yaw_offset_deg',
-        default_value='-28.67',
-        description='Odom yaw offset in degrees (steering calibration)'
+        default_value='0.0',
+        description='Odom yaw offset in degrees (固件已设置steering_offset，此处设为0)'
     )
 
     # ========== 启动 Lidar ==========
@@ -160,6 +161,25 @@ def generate_launch_description():
         }.items()
     )
 
+    # ========== 静态 TF 转换 ==========
+    # base_link -> base_footprint (通常重合，base_footprint 在地面)
+    base_link_to_base_footprint_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_link_to_base_footprint_tf',
+        arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'base_footprint'],
+    )
+
+    # base_link -> camera_link
+    # 摄像头位置：x=0.18m (前方), y=0m, z=0.1m (高度)
+    # 参考 static_tf.launch.py 中的配置
+    base_link_to_camera_link_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_link_to_camera_link_tf',
+        arguments=['0.18', '0', '0.1', '0', '0', '0', 'base_link', 'camera_link'],
+    )
+
     return LaunchDescription([
         # Lidar 参数声明
         lidar_ip_arg,
@@ -189,5 +209,9 @@ def generate_launch_description():
         lidar_launch,
         realsense_launch,
         tianbot_core_launch,
+        
+        # 静态 TF 转换节点
+        base_link_to_base_footprint_tf,
+        base_link_to_camera_link_tf,
     ])
 
