@@ -1,0 +1,30 @@
+# 动态障碍物过滤器参数配置
+dynamic_obstacle_filter:
+  ros__parameters:
+    # 静态障碍物距离阈值（米）
+    # 如果激光点距离地图上的障碍物小于此值，认为是同一个障碍物（静态），过滤掉
+    # 这个值应该大于AMCL的定位误差 + 地图精度误差（通常0.3-0.5米）
+    static_obstacle_threshold: 0.50
+
+    # 地图占用概率阈值（0-100）
+    # 地图上大于此值的cell被认为是障碍物
+    map_occupied_threshold: 50
+
+    # 地图空闲概率阈值（0-100）
+    # 地图上小于此值的cell被认为是空闲区域
+    map_free_threshold: 30
+
+    # 输入激光话题
+    input_scan_topic: "/scan"
+
+    # 输出过滤后的激光话题
+    output_scan_topic: "/scan_filtered"
+
+    # 地图话题
+    map_topic: "/map"
+
+    # 是否启用过滤（可以动态关闭进行对比测试）
+    enable_filter: true
+
+    # 调试模式（输出详细日志）
+    debug: false

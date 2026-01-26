@@ -61,24 +61,24 @@ fi
 # 【警告】如果注释掉某个包，依赖它的包可能会编译失败
 ALL_PACKAGES=(
   # 基础依赖包（必须按顺序）
-  librealsense2              # Intel RealSense SDK - realsense2_camera 的依赖
-  ackermann_msgs             # Ackermann 消息定义 - tianbot_core_ros2 的可选依赖
-  realsense2_camera_msgs     # RealSense 消息定义 - 必须在 realsense2_camera 之前
-  realsense2_camera          # RealSense 相机驱动 - 依赖 librealsense2 和 realsense2_camera_msgs
-  realsense2_description     # RealSense URDF 描述 - 依赖 realsense2_camera_msgs
-  slam_toolbox               # SLAM 工具箱 - tianracer_slam_ros2 的依赖
+  # librealsense2              # Intel RealSense SDK - realsense2_camera 的依赖
+  # ackermann_msgs             # Ackermann 消息定义 - tianbot_core_ros2 的可选依赖
+  # realsense2_camera_msgs     # RealSense 消息定义 - 必须在 realsense2_camera 之前
+  # realsense2_camera          # RealSense 相机驱动 - 依赖 librealsense2 和 realsense2_camera_msgs
+  # realsense2_description     # RealSense URDF 描述 - 依赖 realsense2_camera_msgs
+  # slam_toolbox               # SLAM 工具箱 - tianracer_slam_ros2 的依赖
   
   # 自定义核心包
-  tianbot_core_ros2          # 天博核心通信包 - 可选依赖 ackermann_msgs
-  osight_lidar_ros2          # 激光雷达驱动包
-  tianbot_description_ros2   # 机器人 URDF 描述包
+  # tianbot_core_ros2          # 天博核心通信包 - 可选依赖 ackermann_msgs
+  # osight_lidar_ros2          # 激光雷达驱动包
+  # tianbot_description_ros2   # 机器人 URDF 描述包
   
   # 应用层包
-  tianracer_teleop_ros2      # 遥控操作包
-  tianracer_slam_ros2        # SLAM 配置包 - 依赖 slam_toolbox
-  tianracer_navigation_ros2  # 导航配置包
+  # tianracer_teleop_ros2      # 遥控操作包
+  # tianracer_slam_ros2        # SLAM 配置包 - 依赖 slam_toolbox
+  # tianracer_navigation_ros2  # 导航配置包
   tianracer_bringup_ros2     # 启动配置包
-  map2gazebo                 # 地图转 Gazebo 工具
+  # map2gazebo                 # 地图转 Gazebo 工具
 )
 
 # 在 Ubuntu 22.04 上可以通过 apt 安装的包（ROS2 Humble）

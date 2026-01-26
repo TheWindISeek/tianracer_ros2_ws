@@ -239,20 +239,48 @@ amcl:
 # 影响：控制导航的整体行为，包括路径规划、跟踪、恢复等
 bt_navigator:
   ros__parameters:
-    use_sim_time: False
+    use_sim_time: False  # 是否使用仿真时间
 
+    # global_frame: 全局坐标系名称
+    # - 作用：指定全局坐标系（通常是 "map"）
+    # - 影响：用于路径规划和目标点转换
+    # - 调优：必须与地图坐标系一致，不要修改
     global_frame: "map"
+
+    # robot_base_frame: 机器人基座坐标系
+    # - 作用：指定机器人基座坐标系（通常是 "base_link"）
+    # - 影响：用于计算机器人位置和姿态
+    # - 调优：必须与 URDF 一致，不要修改
     robot_base_frame: "base_link"
+
+    # odom_topic: 里程计话题名称
+    # - 作用：订阅里程计数据用于导航
+    # - 影响：必须与里程计节点发布的话题一致
+    # - 调优：一般保持 "/odom"，不要修改
     odom_topic: "/odom"
 
-    # 使用自定义行为树（无 Spin，适合阿克曼底盘）
-    default_nav_to_pose_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav.xml
-    default_nav_through_poses_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav_through_poses.xml
-
+    # bt_loop_duration: 行为树循环周期（毫秒）
+    # - 作用：行为树执行一次循环的时间间隔
+    # - 影响：值越小响应越快但 CPU 占用越高
+    # - 调优：一般 10-20ms，性能不足时可增大到 50ms
     bt_loop_duration: 10
+
+    # default_server_timeout: 默认服务器超时时间（秒）
+    # - 作用：等待其他服务器（如 planner、controller）响应的超时时间
+    # - 影响：值越大越容忍延迟，但响应变慢
+    # - 调优：网络延迟大或计算慢时可增大到 30-60 秒
     default_server_timeout: 20
 
+    # enable_groot_monitoring: 是否启用 Groot 监控
+    # - 作用：启用 Groot 工具可视化行为树
+    # - 影响：True 时可使用 Groot 调试行为树，但增加网络开销
+    # - 调优：调试时设为 True，生产环境可设为 False
     enable_groot_monitoring: True
+
+    # groot_zmq_publisher_port: Groot 发布端口
+    # - 作用：Groot 工具接收行为树数据的端口
+    # - 影响：必须与 Groot 配置一致
+    # - 调优：一般保持默认值，不需要修改
     groot_zmq_publisher_port: 1666
 
     # groot_zmq_server_port: Groot 服务器端口
@@ -397,116 +425,236 @@ controller_server:
       # - 注意：过小会导致机器人无法对准目标朝向
       yaw_goal_tolerance: 0.35
 
-    # ===== MPPI 控制器配置 =====
-    # MPPI (Model Predictive Path Integral) 控制器
-    # 优势：
-    # - 更适合阿克曼底盘，不会产生原地旋转指令
-    # - 在狭窄空间中表现更好
-    # - 支持倒车和复杂机动
+    # ===== DWB 局部路径跟踪控制器配置 =====
     FollowPath:
-      plugin: "nav2_mppi_controller::MPPIController"
-      
-      # ===== 基本参数 =====
-      time_steps: 56                    # 预测步数（越多越远，但计算量越大）
-      model_dt: 0.1                     # 模型时间步长（秒），必须 >= 1/controller_frequency
-      batch_size: 2000                  # 采样轨迹数量（越多越好，但计算量越大）
-      vx_std: 0.2                       # 线速度采样标准差
-      vy_std: 0.0                       # 横向速度采样标准差（阿克曼底盘设为0）
-      wz_std: 0.4                       # 角速度采样标准差
-      vx_max: 0.4                       # 最大前进速度 (m/s)
-      vx_min: -0.3                      # 最小速度（负值允许倒车）
-      vy_max: 0.0                       # 最大横向速度（阿克曼底盘设为0）
-      wz_max: 0.8                       # 最大角速度 (rad/s)
-      
-      # ===== 迭代参数 =====
-      iteration_count: 1                # 每次控制循环的迭代次数
-      prune_distance: 1.7               # 路径修剪距离（米）
-      transform_tolerance: 0.1          # TF 变换容差（秒）
-      temperature: 0.3                  # 温度参数（越小越贪婪，越大越随机）
-      gamma: 0.015                      # 折扣因子
-      motion_model: "Ackermann"         # 运动模型：Ackermann 适合阿克曼底盘
-      visualize: true                   # 是否可视化轨迹
-      regenerate_noises: true           # 是否重新生成噪声
-      
-      # ===== 阿克曼运动学参数 =====
-      AckermannConstraints:
-        min_turning_r: 0.45             # 最小转弯半径（米），根据实际测量调整（从日志计算得出）
+      plugin: "dwb_core::DWBLocalPlanner"
+      # debug_trajectory_details: 是否输出轨迹调试信息
+      # - 作用：在日志中输出详细的轨迹评估信息
+      # - 影响：True 时便于调试但日志量大，False 时日志简洁
+      # - 调优：调试时设为 True，正常运行时设为 False
+      debug_trajectory_details: True
 
-      # ===== 轨迹可视化 =====
-      TrajectoryVisualizer:
-        trajectory_step: 5              # 可视化轨迹点间隔
-        time_step: 3                    # 可视化时间步间隔
+      # ===== 速度限制参数 =====
+      # min_vel_x: 最小线速度（m/s，负值表示可倒车）
+      # - 作用：允许的最小前进/倒车速度
+      # - 影响：负值允许倒车，提高灵活性但可能不安全
+      # - 调优：真车环境建议 -0.3 到 0.0，仿真可设为 0.0（禁止倒车）
+      min_vel_x: -0.3
 
-      # ===== 评估器（Critics）配置 =====
-      critics: ["ConstraintCritic", "ObstaclesCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
+      # min_vel_y: 最小横向速度（m/s，全向机器人使用）
+      # - 作用：允许的最小横向移动速度
+      # - 影响：非全向机器人应设为 0.0
+      # - 调优：差速/阿克曼底盘设为 0.0，全向轮可设为负值
+      min_vel_y: 0.0
+
+      # max_vel_x: 最大线速度（m/s）
+      # - 作用：允许的最大前进速度
+      # - 影响：值越大速度越快，但控制难度增加
+      # - 调优：降低到 0.4，在狭窄空间更安全
+      max_vel_x: 0.4
+
+      # max_vel_y: 最大横向速度（m/s，全向机器人使用）
+      # - 作用：允许的最大横向移动速度
+      # - 影响：非全向机器人应设为 0.0
+      # - 调优：差速/阿克曼底盘设为 0.0
+      max_vel_y: 0.0
+
+      # max_vel_theta: 最大角速度（rad/s）
+      # - 作用：允许的最大旋转速度
+      # - 影响：值越大转向越快，但可能不稳定
+      # - 调优：降低到 0.8，在狭窄空间更稳定
+      max_vel_theta: 0.8
+
+      # ===== 速度模长限制 =====
+      # min_speed_xy: 最小线速度模长（m/s）
+      # - 作用：避免选择"几乎静止"的轨迹
+      # - 影响：值越大越倾向于运动，但可能无法精确到达
+      # - 调优：一般 0.05-0.1，高精度要求时可减小
+      min_speed_xy: 0.05
+
+      # max_speed_xy: 最大线速度模长（m/s）
+      # - 作用：限制速度上限（通常等于 max_vel_x）
+      # - 影响：与 max_vel_x 配合使用
+      # - 调优：与 max_vel_x 保持一致
+      max_speed_xy: 0.4
+
+      # min_speed_theta: 最小角速度模长（rad/s）
+      # - 作用：避免选择"几乎不转"的轨迹
+      # - 影响：值越大越倾向于旋转，但可能无法精确对准
+      # - 调优：一般 0.0（允许不转），需要时可设为 0.1-0.2
+      min_speed_theta: 0.0
+
+      # ===== 加速度限制 =====
+      # acc_lim_x: 线加速度限制（m/s²）
+      # - 作用：限制线速度变化率
+      # - 影响：值越大加速越快，但可能不稳定
+      # - 调优：根据机器人物理限制设置（一般 0.5-2.0），真车建议 0.8-1.5
+      acc_lim_x: 1.0
+
+      # acc_lim_y: 横向加速度限制（m/s²，全向机器人使用）
+      # - 作用：限制横向速度变化率
+      # - 影响：非全向机器人应设为 0.0
+      # - 调优：差速/阿克曼底盘设为 0.0
+      acc_lim_y: 0.0
+
+      # acc_lim_theta: 角加速度限制（rad/s²）
+      # - 作用：限制角速度变化率
+      # - 影响：值越大转向越快，但可能不稳定
+      # - 调优：一般 2.0-5.0，真车建议 2.5-4.0
+      acc_lim_theta: 3.0
+
+      # decel_lim_x: 线减速度限制（m/s²，负值）
+      # - 作用：限制线速度减小率（制动）
+      # - 影响：绝对值越大制动越快，但可能不平稳
+      # - 调优：一般 -0.5 到 -2.0，真车建议 -1.0 到 -1.5
+      decel_lim_x: -1.0
+
+      # decel_lim_theta: 角减速度限制（rad/s²，负值）
+      # - 作用：限制角速度减小率
+      # - 影响：绝对值越大停止旋转越快
+      # - 调优：一般 -2.0 到 -5.0，真车建议 -2.5 到 -4.0
+      decel_lim_theta: -3.0
+
+      # ===== 速度采样参数 =====
+      # vx_samples: X 方向速度采样数量
+      # - 作用：在 min_vel_x 到 max_vel_x 之间采样多少个速度值
+      # - 影响：值越大轨迹选择越多，但计算量越大
+      # - 修改：增加到 30，提供更多的倒车速度选择
+      vx_samples: 30
+
+      # vy_samples: Y 方向速度采样数量（全向机器人使用）
+      # - 作用：横向速度采样数量
+      # - 影响：非全向机器人应设为 1 或 5
+      # - 调优：差速/阿克曼底盘设为 1-5
+      vy_samples: 5
+
+      # vtheta_samples: 角速度采样数量
+      # - 作用：在 -max_vel_theta 到 max_vel_theta 之间采样多少个角速度值
+      # - 影响：值越大轨迹选择越多，但计算量越大
+      # - 修改：增加到 30，提供更多的转向选择
+      vtheta_samples: 30
+
+      # ===== 轨迹预测参数 =====
+      # sim_time: 轨迹预测时间（秒）
+      # - 作用：预测未来多长时间内的轨迹
+      # - 影响：值越大预测越远，避障能力越强但计算量越大
+      # - 修改：增加到 3.0 秒，让 DWB 预测更长的轨迹，有助于在狭窄空间中找到出路
+      sim_time: 3.0
+
+      # linear_granularity: 线性轨迹粒度（米）
+      # - 作用：轨迹点之间的最小距离
+      # - 影响：值越小轨迹越平滑但计算量越大
+      # - 调优：一般 0.02-0.1 米，高精度要求时减小
+      linear_granularity: 0.05
+
+      # angular_granularity: 角度轨迹粒度（弧度）
+      # - 作用：轨迹点之间的最小角度差
+      # - 影响：值越小轨迹越平滑但计算量越大
+      # - 调优：一般 0.01-0.05 弧度（约 0.6-3 度）
+      angular_granularity: 0.025
+
+      # ===== 其他参数 =====
+      # transform_tolerance: TF 变换容差（秒）
+      # - 作用：允许的 TF 变换时间延迟
+      # - 影响：值越大对时间同步要求越宽松
+      # - 调优：一般 0.1-1.0，网络延迟大时可增大
+      transform_tolerance: 5.0
+
+      # xy_goal_tolerance: 目标位置容差（米）
+      # - 作用：到达目标时的位置误差容忍范围
+      # - 影响：与 general_goal_checker 的 xy_goal_tolerance 配合使用
+      # - 调优：一般与 goal_checker 保持一致
+      xy_goal_tolerance: 0.35
+
+      # trans_stopped_velocity: 静止速度阈值（m/s）
+      # - 作用：低于此速度视为静止
+      # - 影响：用于判断机器人是否停止
+      # - 调优：一般 0.01-0.1，避免过小导致误判
+      trans_stopped_velocity: 0.05
+
+      # short_circuit_trajectory_evaluation: 是否短路轨迹评估
+      # - 作用：True 时找到第一个有效轨迹就停止搜索
+      # - 影响：True 时计算快但可能不是最优轨迹，False 时计算慢但更优
+      # - 修改：设为 False，在狭窄空间中需要找到最优轨迹
+      short_circuit_trajectory_evaluation: False
+
+      # stateful: 是否保持状态
+      # - 作用：True 时记住之前的状态，False 时每次重新计算
+      # - 影响：True 时更稳定，False 时更灵活
+      # - 调优：一般保持 True，不需要修改
+      stateful: True
+
+      # ===== 轨迹评估器（Critics）配置 =====
+      # critics: 使用的评估器列表
+      # - 作用：评估每个候选轨迹的优劣
+      # - 影响：不同评估器关注不同方面（避障、路径对齐、目标距离等）
+      # - 调优：可根据需要添加或移除评估器
+      # - 注意：移除了 RotateToGoal，因为阿克曼底盘无法原地旋转！
+      critics: ["Oscillation", "BaseObstacle", "ObstacleFootprint", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+
+      # BaseObstacle.scale: 基础障碍物评估器权重
+      # - 作用：评估轨迹是否碰撞障碍物（基于机器人中心点）
+      # - 影响：值越大越避免碰撞，但可能过于保守
+      # - 调优：增大到 0.05，提高对障碍物的敏感度
+      BaseObstacle.scale: 0.05
+
+      # ObstacleFootprint.scale: 机器人轮廓障碍物评估器权重
+      # - 作用：评估轨迹是否碰撞障碍物（基于机器人完整轮廓）
+      # - 影响：值越大越避免碰撞，比 BaseObstacle 更精确
+      # - 调优：增大到 2.0，这是狭窄空间导航的关键参数
+      #         确保控制器使用完整足迹进行碰撞检测
+      ObstacleFootprint.scale: 2.0
+
+      # PathAlign.scale: 路径对齐评估器权重
+      # - 作用：评估轨迹与全局路径的对齐程度
+      # - 影响：值越大越倾向于跟随路径，但可能不够灵活
+      # - 修改：降低到 12.0，让机器人在狭窄空间中更灵活
+      PathAlign.scale: 12.0
+
+      # PathAlign.forward_point_distance: 前向预测距离（米）
+      # - 作用：在路径前方多远的位置评估对齐
+      # - 影响：值越大考虑越远，但可能不够精确
+      # - 调优：一般 0.1-0.3，高速时可增大
+      PathAlign.forward_point_distance: 0.1
+
+      # GoalAlign.scale: 目标对齐评估器权重
+      # - 作用：评估轨迹朝向目标的程度
+      # - 影响：值越大越倾向于朝向目标，但可能不够平滑
+      # - 修改：降低到 10.0，允许机器人暂时背对目标（倒车）
+      GoalAlign.scale: 10.0
+
+      # GoalAlign.forward_point_distance: 前向预测距离（米）
+      # - 作用：在目标前方多远的位置评估对齐
+      # - 影响：值越大考虑越远
+      # - 调优：一般 0.1-0.3
+      GoalAlign.forward_point_distance: 0.1
+
+      # PathDist.scale: 路径距离评估器权重
+      # - 作用：评估轨迹与全局路径的距离
+      # - 影响：值越大越倾向于靠近路径
+      # - 修改：降低到 12.0，让机器人可以暂时偏离路径
+      PathDist.scale: 12.0
+
+      # GoalDist.scale: 目标距离评估器权重
+      # - 作用：评估轨迹到目标的距离
+      # - 影响：值越大越倾向于接近目标
+      # - 调优：一般 15-30，接近目标时重要
+      GoalDist.scale: 16.0
+
+      # 注意：已移除 RotateToGoal 评估器，因为阿克曼底盘无法原地旋转
+      # 如果需要在目标点对准方向，应该通过前进/倒车配合转向来实现
+
+      # Oscillation.scale: 振荡检测评估器权重
+      # - 作用：检测和避免机器人来回振荡
+      # - 影响：值越大越避免振荡，但可能过于保守
+      # - 修改：从 10.0 减到 3.0，允许在狭窄空间中进行小幅调整
+      Oscillation.scale: 3.0
       
-      # 约束评估器：确保轨迹满足运动学约束
-      ConstraintCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 4.0
-      
-      # 障碍物评估器：避免碰撞
-      ObstaclesCritic:
-        enabled: true
-        cost_power: 1
-        repulsion_weight: 1.5           # 排斥力权重
-        critical_weight: 20.0           # 关键碰撞权重
-        consider_footprint: true        # 使用完整足迹检测碰撞（重要！）
-        collision_cost: 10000.0         # 碰撞代价
-        collision_margin_distance: 0.1  # 碰撞边距（米）
-        near_goal_distance: 0.5         # 接近目标时的距离阈值
-        inflation_layer_name: "inflation_layer"
-      
-      # 目标评估器：接近目标点
-      GoalCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        threshold_to_consider: 1.4      # 开始考虑目标的距离阈值
-      
-      # 目标角度评估器：对准目标方向
-      GoalAngleCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 3.0
-        threshold_to_consider: 0.4      # 减小阈值，更接近目标时才考虑目标角度
-      
-      # 路径对齐评估器：与路径对齐
-      PathAlignCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 14.0
-        max_path_occupancy_ratio: 0.05
-        trajectory_point_step: 3
-        threshold_to_consider: 0.5
-        offset_from_furthest: 20
-        use_path_orientations: false
-      
-      # 路径跟随评估器：跟随全局路径
-      PathFollowCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        offset_from_furthest: 5
-        threshold_to_consider: 1.4
-      
-      # 路径角度评估器：与路径方向一致
-      PathAngleCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 2.0
-        offset_from_furthest: 4
-        threshold_to_consider: 0.4      # 减小阈值，更接近目标时才考虑角度
-        max_angle_to_furthest: 1.0      # 允许的最大偏离角度（弧度）
-        mode: 0                         # 0: 考虑前进和后退
-      
-      # 优先前进评估器：优先选择前进而非后退
-      PreferForwardCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        threshold_to_consider: 0.4      # 减小阈值，更接近目标时才考虑方向偏好
+      # Oscillation 的重置参数
+      # - oscillation_reset_dist: 移动多远后重置振荡检测
+      # - oscillation_reset_angle: 转多少角度后重置振荡检测
+      Oscillation.oscillation_reset_dist: 0.10
+      Oscillation.oscillation_reset_angle: 0.20
 
 # ============================================================================
 # planner_server: 路径规划器服务器
@@ -526,33 +674,65 @@ planner_server:
     # planner_plugins: 规划器插件列表
     # - 作用：使用的全局路径规划算法
     # - 影响：不同算法有不同的特点（速度、质量、适用场景）
-    # - 调优：NavFn 是经典的 Dijkstra/A* 规划器，简单快速
+    # - 调优：可尝试 "GridBased"（快速）、"SmacPlanner"（高质量）、"ThetaStar"（平滑）
     planner_plugins: ["GridBased"]
 
-    # ===== NavFn 规划器配置 =====
-    # NavFn 是 Nav2 中经典的全局路径规划器
-    # 优点：简单、快速、稳定
-    # 缺点：不考虑机器人运动学约束（如转弯半径），路径可能不够平滑
+    # ===== Smac Hybrid-A* 规划器配置 =====
+    # 说明：SmacPlannerHybrid 支持 SE2 足迹碰撞检测，能精确判断非圆形机器人能否通过狭窄空间
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-
+      plugin: "nav2_smac_planner/SmacPlannerHybrid"
+      
       # tolerance: 目标容差（米）
-      # - 作用：允许的目标点误差范围
-      # - 影响：值越大越容易找到路径，但终点可能不精确
-      # - 调优：一般 0.5-1.0 米
+      # - 作用：允许的路径终点与目标点的距离误差
+      # - 调优：一般 0.25-0.5 米
       tolerance: 0.5
-
-      # use_astar: 是否使用 A* 算法
-      # - 作用：True 使用 A*（更快），False 使用 Dijkstra（更完整）
-      # - 影响：A* 通常更快但可能不是最优路径
-      # - 调优：一般设为 True
-      use_astar: true
-
-      # allow_unknown: 是否允许穿过未知区域
-      # - 作用：True 时可以规划穿过灰色（未知）区域的路径
-      # - 影响：True 更灵活但可能不安全
-      # - 调优：地图完整时设为 False，探索时设为 True
+      
+      # downsample_costmap: 是否下采样代价地图
+      # - 作用：降低计算复杂度
+      # - 影响：True 时更快但精度降低
+      downsample_costmap: false
+      downsampling_factor: 1
+      
+      # allow_unknown: 是否允许在未知区域规划
       allow_unknown: true
+      
+      # max_iterations: 最大规划迭代次数
+      max_iterations: 1000000
+      
+      # max_planning_time: 最大规划时间（秒）
+      max_planning_time: 5.0
+      
+      # motion_model: 运动模型
+      # - "REEDS_SHEPP": 可前进后退（适合差速/阿克曼底盘）
+      # - "DUBIN": 只能前进（适合只能前进的底盘）
+      motion_model: "REEDS_SHEPP"
+      
+      # angle_quantization_bins: 角度量化数（角度分辨率 = 360/bins）
+      # - 作用：控制路径的角度精度
+      # - 影响：值越大角度越精确但计算量越大
+      angle_quantization_bins: 72
+      
+      # minimum_turning_radius: 最小转弯半径（米）
+      # - 作用：机器人的物理转弯限制
+      # - 调优：根据阿克曼底盘的实际转弯半径设置
+      minimum_turning_radius: 0.4
+      
+      # analytic_expansion: 分析扩展参数
+      analytic_expansion_ratio: 3.5
+      analytic_expansion_max_length: 3.0
+      
+      # smooth_path: 是否平滑路径
+      smooth_path: true
+      
+      # 惩罚系数
+      cost_penalty: 2.0           # 代价惩罚
+      change_penalty: 0.0         # 方向改变惩罚
+      non_straight_penalty: 1.2   # 非直线惩罚
+      reverse_penalty: 2.0        # 倒车惩罚
+      
+      # lookup_table_size: 启发式查找表大小
+      lookup_table_size: 20.0
+      cache_obstacle_heuristic: false
 
 # ============================================================================
 # behavior_server: 恢复行为服务器
@@ -581,12 +761,31 @@ behavior_server:
     # - 调优：一般 5-10Hz，不需要太高
     cycle_frequency: 10.0
 
-    # behavior_plugins: 恢复行为插件列表（阿克曼底盘，无 spin）
-    behavior_plugins: ["backup", "wait"]
+    # behavior_plugins: 恢复行为插件列表
+    # - 作用：可用的恢复行为（按顺序执行）
+    # - 影响：不同行为有不同的恢复策略
+    # - 注意：必须保留 spin，因为默认行为树需要它
+    #         调整顺序：先 backup，再 spin（会快速失败），最后 wait
+    behavior_plugins: ["backup", "spin", "wait"]
+
+    # ===== 旋转行为配置 =====
+    # 注意：阿克曼底盘不能原地旋转，此行为会快速失败
+    # 但必须保留，因为默认行为树需要这个 action server
+    spin:
+      plugin: "nav2_behaviors/Spin"
+      # simulate_ahead_time: 模拟时间（秒）
+      simulate_ahead_time: 1.0
+      # max_rotational_vel: 最大旋转速度（rad/s）
+      max_rotational_vel: 0.5
+      # min_rotational_vel: 最小旋转速度（rad/s）
+      min_rotational_vel: 0.2
+      # time_allowance: 超时时间（秒）- 设为 2 秒快速失败
+      time_allowance: 2.0
 
     # ===== 后退行为配置 =====
     backup:
       plugin: "nav2_behaviors/BackUp"
+      # 调整倒车参数，让机器人在狭窄空间能够更好地脱困
       speed_xy: 0.1           # 倒车速度（m/s），低速安全
       speed_theta: 0.0        # 阿克曼底盘不能原地转向
       time_allowance: 10.0    # 倒车最大时间（秒）
@@ -594,6 +793,9 @@ behavior_server:
     # ===== 等待行为配置 =====
     wait:
       plugin: "nav2_behaviors/Wait"
+      # 注意：具体参数在 behavior_server 的配置中设置
+      # 如需调整，可添加以下参数：
+      # - wait_duration: 等待时间（秒）
 
     # global_frame: 全局坐标系名称
     # - 作用：恢复行为使用的坐标系
@@ -663,8 +865,8 @@ local_costmap:
       # - 作用：局部代价地图的宽度和高度
       # - 影响：值越大覆盖范围越大但计算量越大
       # - 调优：一般 3-10 米，高速机器人建议 5-10 米
-      width: 3
-      height: 2
+      width: 5
+      height: 5
 
       # resolution: 分辨率（米/像素）
       # - 作用：每个像素代表的实际距离
@@ -703,10 +905,19 @@ local_costmap:
       # ===== 膨胀图层配置 =====
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        # cost_scaling_factor: 值越大衰减越快，不会把狭窄通道堵死
-        cost_scaling_factor: 10.0
-        # inflation_radius: 改回 0.08m，避免把垃圾桶和墙连成一片
-        inflation_radius: 0.08
+        # cost_scaling_factor: 代价缩放因子
+        # - 作用：控制障碍物周围代价的衰减速度
+        # - 影响：值越大衰减越快，成本梯度越陡峭
+        # - 调优：设为10.0，快速衰减，这样膨胀区域有成本但不会堵死通道
+        cost_scaling_factor: 40.0
+
+        # inflation_radius: 膨胀半径（米）
+        # - 作用：障碍物周围产生代价的区域半径
+        # - 修改：进一步减小到 0.05m
+        #         在 0.6m 通道中：0.6m - 2*0.05m = 0.50m 可用空间
+        #         机器人宽度 0.4m 有足够余量
+        # - 注意：真正的碰撞检测由控制器的 ObstacleFootprint critic 完成
+        inflation_radius: 0.05
 
       # ===== 体素图层配置 =====
       voxel_layer:
@@ -1017,10 +1228,18 @@ global_costmap:
       # ===== 膨胀图层配置 =====
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        # cost_scaling_factor: 值越大衰减越快
-        cost_scaling_factor: 10.0
-        # inflation_radius: 改回 0.08m，避免把障碍物连成一片
-        inflation_radius: 0.08
+        # cost_scaling_factor: 代价缩放因子
+        # - 作用：控制障碍物周围代价的衰减速度
+        # - 影响：值越大衰减越快
+        # - 调优：设为5.0，适度衰减创建平滑势能场
+        cost_scaling_factor: 5.0
+
+        # inflation_radius: 膨胀半径（米）
+        # - 作用：障碍物周围产生代价的区域半径
+        # - 影响：设为0.05m，配合Smac的SE2足迹碰撞检测
+        #         允许规划器规划进入0.6m的狭窄通道
+        # - 注意：真正的碰撞检测由Smac的footprint完成，这里只做轻微膨胀
+        inflation_radius: 0.05
 
       # always_send_full_costmap: 是否总是发送完整代价地图
       # - 作用：True 时每次更新都发送完整地图，False 时只发送变化部分

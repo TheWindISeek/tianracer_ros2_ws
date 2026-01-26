@@ -526,33 +526,46 @@ planner_server:
     # planner_plugins: 规划器插件列表
     # - 作用：使用的全局路径规划算法
     # - 影响：不同算法有不同的特点（速度、质量、适用场景）
-    # - 调优：NavFn 是经典的 Dijkstra/A* 规划器，简单快速
+    # - 调优：可尝试 "GridBased"（快速）、"SmacPlanner"（高质量）、"ThetaStar"（平滑）
     planner_plugins: ["GridBased"]
 
-    # ===== NavFn 规划器配置 =====
-    # NavFn 是 Nav2 中经典的全局路径规划器
-    # 优点：简单、快速、稳定
-    # 缺点：不考虑机器人运动学约束（如转弯半径），路径可能不够平滑
+    # ===== Smac Hybrid-A* 规划器配置 =====
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
+      plugin: "nav2_smac_planner/SmacPlannerHybrid"
 
-      # tolerance: 目标容差（米）
-      # - 作用：允许的目标点误差范围
-      # - 影响：值越大越容易找到路径，但终点可能不精确
-      # - 调优：一般 0.5-1.0 米
-      tolerance: 0.5
-
-      # use_astar: 是否使用 A* 算法
-      # - 作用：True 使用 A*（更快），False 使用 Dijkstra（更完整）
-      # - 影响：A* 通常更快但可能不是最优路径
-      # - 调优：一般设为 True
-      use_astar: true
-
-      # allow_unknown: 是否允许穿过未知区域
-      # - 作用：True 时可以规划穿过灰色（未知）区域的路径
-      # - 影响：True 更灵活但可能不安全
-      # - 调优：地图完整时设为 False，探索时设为 True
+      tolerance: 0.5                    # 目标容差（米）
+      downsample_costmap: false
+      downsampling_factor: 1
       allow_unknown: true
+      max_iterations: 1000000
+      max_planning_time: 5.0
+
+      # 运动模型：REEDS_SHEPP 支持前进和倒车
+      motion_model: "REEDS_SHEPP"
+
+      # 角度分辨率：72 bins = 5度/bin
+      angle_quantization_bins: 72
+
+      # 最小转弯半径：根据实际测量设为 0.45m
+      minimum_turning_radius: 0.45
+
+      # 分析扩展参数：增大 ratio 让规划器更积极地尝试直接连接目标
+      analytic_expansion_ratio: 3.5
+      analytic_expansion_max_length: 3.0
+      analytic_expansion_max_cost: 200.0    # 允许穿过有代价的区域
+      analytic_expansion_max_cost_override: false
+
+      smooth_path: true
+
+      # 惩罚系数 - 关键参数
+      cost_penalty: 2.0                 # 代价惩罚
+      change_penalty: 0.0               # 方向改变惩罚（设为0，允许换向）
+      non_straight_penalty: 1.0         # 非直线惩罚
+      reverse_penalty: 1.0              # 倒车惩罚（设为1.0，与前进相同代价）
+      retrospective_penalty: 0.015      # 回溯惩罚
+
+      lookup_table_size: 20.0
+      cache_obstacle_heuristic: false
 
 # ============================================================================
 # behavior_server: 恢复行为服务器

@@ -23,6 +23,11 @@ install(DIRECTORY config/
   DESTINATION share/${PROJECT_NAME}/config
 )
 
+# Install behavior trees
+install(DIRECTORY behavior_trees/
+  DESTINATION share/${PROJECT_NAME}/behavior_trees
+)
+
 # Install docs
 install(DIRECTORY docs/
   DESTINATION share/${PROJECT_NAME}/docs

@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>scan_filter</name>
+  <version>1.0.0</version>
+  <description>
+    智能激光扫描过滤器
+    - 过滤掉与静态地图重合的障碍物（避免定位误差导致的"双层墙"）
+    - 保留地图上空闲区域的新障碍物（检测动态障碍物）
+  </description>
+  <maintainer email="FAIZ030612@163.com">JeffreySharp</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
