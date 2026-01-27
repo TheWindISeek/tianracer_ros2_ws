@@ -60,13 +60,13 @@ amcl:
     # - 作用：机器人移动超过此距离才更新定位
     # - 影响：值越大更新频率越低，节省计算但响应变慢
     # - 调优：快速移动机器人可增大到 0.3-0.5，慢速机器人 0.1-0.2
-    update_min_d: 0.1
+    update_min_d: 0.2
 
     # update_min_a: 最小旋转角度阈值（弧度）
     # - 作用：机器人旋转超过此角度才更新定位
     # - 影响：值越大更新频率越低
-    # - 调优：一般 0.1-0.2 弧度（约 6-12 度），让转弯时能及时更新
-    update_min_a: 0.1
+    # - 调优：一般 0.3-0.5 弧度（约 17-29 度），频繁旋转可减小
+    update_min_a: 0.5
 
     # resample_interval: 重采样间隔
     # - 作用：每 N 次更新才进行一次重采样
@@ -78,7 +78,7 @@ amcl:
     # - 作用：允许的 TF 变换时间延迟
     # - 影响：值越大对时间同步要求越宽松，但可能使用过时数据
     # - 调优：网络延迟大或 TF 不稳定时可增大到 1.0-2.0
-    transform_tolerance: 4.0
+    transform_tolerance: 5.0
 
     # ===== 恢复行为参数 =====
     # recovery_alpha_slow: 慢速恢复因子
@@ -246,10 +246,8 @@ bt_navigator:
     odom_topic: "/odom"
 
     # 使用自定义行为树（无 Spin，适合阿克曼底盘）
-    # default_nav_to_pose_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav.xml
+    default_nav_to_pose_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav.xml
     default_nav_through_poses_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav_through_poses.xml
-    default_nav_to_pose_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav_shuttle.xml
-
 
     bt_loop_duration: 10
     default_server_timeout: 20
@@ -312,9 +310,6 @@ bt_navigator:
     - nav2_back_up_cancel_bt_node
     - nav2_assisted_teleop_cancel_bt_node
     - nav2_drive_on_heading_cancel_bt_node
-    # Tianracer 自定义行为树节点
-    - tianracer_is_goal_in_front_bt_node
-    - tianracer_shuttle_to_orientation_bt_node
 
 # ============================================================================
 # controller_server: 控制器服务器
@@ -415,9 +410,9 @@ controller_server:
       time_steps: 56                    # 预测步数（越多越远，但计算量越大）
       model_dt: 0.1                     # 模型时间步长（秒），必须 >= 1/controller_frequency
       batch_size: 2000                  # 采样轨迹数量（越多越好，但计算量越大）
-      vx_std: 0.15                      # 线速度采样标准差（减小以提高稳定性）
+      vx_std: 0.2                       # 线速度采样标准差
       vy_std: 0.0                       # 横向速度采样标准差（阿克曼底盘设为0）
-      wz_std: 0.2                       # 角速度采样标准差（减小以减少转向抖动）
+      wz_std: 0.4                       # 角速度采样标准差
       vx_max: 0.4                       # 最大前进速度 (m/s)
       vx_min: -0.3                      # 最小速度（负值允许倒车）
       vy_max: 0.0                       # 最大横向速度（阿克曼底盘设为0）
@@ -435,7 +430,7 @@ controller_server:
       
       # ===== 阿克曼运动学参数 =====
       AckermannConstraints:
-        min_turning_r: 0.34             # 最小转弯半径（米），= 轴距0.40m / tan(50°) ≈ 0.34m
+        min_turning_r: 0.45             # 最小转弯半径（米），根据实际测量调整（从日志计算得出）
 
       # ===== 轨迹可视化 =====
       TrajectoryVisualizer:

@@ -13,16 +13,22 @@
 
   <!-- ROS2 core dependencies -->
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
-  
+
   <!-- TF2 dependencies -->
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
-  
+  <depend>tf2_geometry_msgs</depend>
+
+  <!-- Behavior Tree dependencies -->
+  <depend>behaviortree_cpp_v3</depend>
+  <depend>nav2_behavior_tree</depend>
+
   <!-- Nav2 dependencies (runtime) -->
   <!-- These packages need to be installed via apt -->
   <!-- ros-humble-navigation2, ros-humble-nav2-bringup, etc. -->

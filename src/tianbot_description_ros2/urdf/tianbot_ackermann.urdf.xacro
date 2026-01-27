@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <robot name="tianbot_ackermann" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- 实际尺寸参数 -->
-  <xacro:property name="chassis_length" value="0.63"/>
+  <!-- 实际尺寸参数（根据实测调整） -->
+  <xacro:property name="chassis_length" value="0.60"/>
   <xacro:property name="chassis_width" value="0.40"/>
   <xacro:property name="chassis_height" value="0.40"/>
 
@@ -11,9 +11,10 @@
   <xacro:property name="wheel_mass" value="3.0"/>
   <xacro:property name="steering_mass" value="0.01"/>
 
-  <!-- 轮子位置：前轮距前端6cm，后轮距后端4cm -->
-  <xacro:property name="front_wheel_x" value="${chassis_length/2 - 0.06}"/>
-  <xacro:property name="rear_wheel_x" value="${-chassis_length/2 + 0.04}"/>
+  <!-- 轮子位置：前轮距前端13cm，后轮距后端7cm（实测值） -->
+  <!-- 轴距 = 0.60 - 0.13 - 0.07 = 0.40m -->
+  <xacro:property name="front_wheel_x" value="${chassis_length/2 - 0.13}"/>
+  <xacro:property name="rear_wheel_x" value="${-chassis_length/2 + 0.07}"/>
   <xacro:property name="wheel_y" value="${chassis_width/2}"/>
 
   <xacro:property name="wheelbase" value="${front_wheel_x - rear_wheel_x}"/>

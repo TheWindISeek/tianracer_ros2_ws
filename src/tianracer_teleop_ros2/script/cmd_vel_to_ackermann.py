@@ -21,8 +21,8 @@ class CmdVelToAckermann(Node):
         self.declare_parameter('input_topic', '/cmd_vel')
         self.declare_parameter('output_topic', '/tianracer/ackermann_cmd')
         self.declare_parameter('output_type', 'auto')  # auto, twist, ackermann
-        self.declare_parameter('wheelbase', 0.26)  # 轴距，单位：米
-        self.declare_parameter('steering_offset_degrees', 28.65)  # 舵机偏移，单位：度
+        self.declare_parameter('wheelbase', 0.40)  # 轴距，单位：米（实测值）
+        self.declare_parameter('steering_offset_degrees', 0.0)  # 舵机偏移，单位：度（固件已补偿 -21 度，此处设为 0）
         
         # 获取参数
         input_topic = self.get_parameter('input_topic').get_parameter_value().string_value

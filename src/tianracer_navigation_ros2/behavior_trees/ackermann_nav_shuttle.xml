@@ -1,0 +1,70 @@
+<!--
+  Tianracer 阿克曼底盘导航行为树 - 带 Shuttle 朝向调整
+
+  特性：
+  1. 目标在后方时，先 Shuttle 调整朝向再导航
+  2. Shuttle 调整在 Action 内部持续执行，直到朝向正确
+  3. 恢复行为暂时保持原样
+-->
+<root main_tree_to_execute="MainTree">
+
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="TianracerNavigateRecovery">
+
+      <Sequence name="NavigateWithReplanning">
+
+        <!-- ========== 阶段1: 朝向预处理（只执行一次） ========== -->
+        <!-- 如果目标在前方（±90°以内），跳过 Shuttle -->
+        <Fallback name="OrientationCheck">
+          <!-- 目标已在前方，跳过 -->
+          <IsGoalInFront goal="{goal}" angle_threshold="90.0"/>
+          <!-- 目标在后方，执行 Shuttle 调整，直到目标在±30°以内 -->
+          <ShuttleToOrientation goal="{goal}"
+                                angle_threshold="10.0"
+                                clearance_threshold="0.8"
+                                forward_distance="0.3"
+                                backward_distance="0.3"
+                                speed="0.2"
+                                steering_angle="28.0"
+                                timeout="120.0"/>
+        </Fallback>
+
+        <!-- ========== 阶段2: 路径规划（使用 PipelineSequence 实现重规划） ========== -->
+        <PipelineSequence name="PlanAndFollow">
+          <RateController hz="1.0">
+            <RecoveryNode number_of_retries="1" name="ComputePath">
+              <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+              <ClearEntireCostmap name="ClearGlobalCostmap"
+                                  service_name="global_costmap/clear_entirely_global_costmap"/>
+            </RecoveryNode>
+          </RateController>
+
+          <!-- ========== 阶段3: 路径跟踪 ========== -->
+          <RecoveryNode number_of_retries="1" name="FollowPath">
+            <FollowPath path="{path}" controller_id="FollowPath"/>
+            <ClearEntireCostmap name="ClearLocalCostmap"
+                                service_name="local_costmap/clear_entirely_local_costmap"/>
+          </RecoveryNode>
+        </PipelineSequence>
+
+      </Sequence>
+
+      <!-- ========== 恢复行为（保持原样） ========== -->
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree"
+                                service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree"
+                                service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Wait wait_duration="3"/>
+          <BackUp backup_dist="0.30" backup_speed="0.10"/>
+        </RoundRobin>
+      </ReactiveFallback>
+
+    </RecoveryNode>
+  </BehaviorTree>
+
+</root>

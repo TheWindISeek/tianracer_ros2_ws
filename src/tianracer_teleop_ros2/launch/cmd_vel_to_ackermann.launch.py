@@ -23,12 +23,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'wheelbase',
-            default_value='0.26',
+            default_value='0.40',
             description='Wheelbase in meters'
         ),
         DeclareLaunchArgument(
             'steering_offset_degrees',
-            default_value='-28.65',
+            default_value='0.0',
             description='Steering offset in degrees to compensate for misaligned front wheels'
         ),
         Node(
