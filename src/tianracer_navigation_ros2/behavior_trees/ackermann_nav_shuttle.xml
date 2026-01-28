@@ -3,22 +3,21 @@
 
   特性：
   1. 目标在后方时，先 Shuttle 调整朝向再导航
-  2. Shuttle 调整在 Action 内部持续执行，直到朝向正确
-  3. 恢复行为暂时保持原样
+  2. Shuttle 只在导航开始时执行一次，不会因为规划失败而重复
+  3. 恢复行为只针对路径规划和跟踪
 -->
 <root main_tree_to_execute="MainTree">
 
   <BehaviorTree ID="MainTree">
-    <RecoveryNode number_of_retries="6" name="TianracerNavigateRecovery">
+    <Sequence name="NavigateWithShuttle">
 
-      <Sequence name="NavigateWithReplanning">
-
-        <!-- ========== 阶段1: 朝向预处理（只执行一次） ========== -->
-        <!-- 如果目标在前方（±90°以内），跳过 Shuttle -->
-        <Fallback name="OrientationCheck">
-          <!-- 目标已在前方，跳过 -->
-          <IsGoalInFront goal="{goal}" angle_threshold="90.0"/>
-          <!-- 目标在后方，执行 Shuttle 调整，直到目标在±30°以内 -->
+      <!-- ========== 阶段1: 朝向预处理（只执行一次，在 RecoveryNode 外面） ========== -->
+      <!-- 如果目标在前方（±90°以内），跳过 Shuttle -->
+      <Fallback name="OrientationCheck">
+        <!-- 目标已在前方，跳过 -->
+        <IsGoalInFront goal="{goal}" angle_threshold="90.0"/>
+        <!-- 目标在后方，执行 Shuttle 调整，直到目标在±5°以内 -->
+        <Sequence name="ShuttleAndClear">
           <ShuttleToOrientation goal="{goal}"
                                 angle_threshold="10.0"
                                 clearance_threshold="0.8"
@@ -27,9 +26,21 @@
                                 speed="0.2"
                                 steering_angle="28.0"
                                 timeout="120.0"/>
-        </Fallback>
+          <!-- Shuttle 完成后等待 AMCL 收敛 -->
+          <Wait wait_duration="2"/>
+          <!-- 清除 costmap，避免因位置偏移导致规划失败 -->
+          <ClearEntireCostmap name="ClearLocalAfterShuttle"
+                              service_name="local_costmap/clear_entirely_local_costmap"/>
+          <ClearEntireCostmap name="ClearGlobalAfterShuttle"
+                              service_name="global_costmap/clear_entirely_global_costmap"/>
+          <!-- 等待 costmap 重建 -->
+          <Wait wait_duration="2"/>
+        </Sequence>
+      </Fallback>
 
-        <!-- ========== 阶段2: 路径规划（使用 PipelineSequence 实现重规划） ========== -->
+      <!-- ========== 阶段2: 路径规划和跟踪（带恢复机制） ========== -->
+      <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+
         <PipelineSequence name="PlanAndFollow">
           <RateController hz="1.0">
             <RecoveryNode number_of_retries="1" name="ComputePath">
@@ -39,7 +50,6 @@
             </RecoveryNode>
           </RateController>
 
-          <!-- ========== 阶段3: 路径跟踪 ========== -->
           <RecoveryNode number_of_retries="1" name="FollowPath">
             <FollowPath path="{path}" controller_id="FollowPath"/>
             <ClearEntireCostmap name="ClearLocalCostmap"
@@ -47,24 +57,24 @@
           </RecoveryNode>
         </PipelineSequence>
 
-      </Sequence>
+        <!-- 恢复行为：只针对路径规划和跟踪失败 -->
+        <ReactiveFallback name="RecoveryFallback">
+          <GoalUpdated/>
+          <RoundRobin name="RecoveryActions">
+            <Sequence name="ClearingActions">
+              <ClearEntireCostmap name="ClearLocalCostmap-Subtree"
+                                  service_name="local_costmap/clear_entirely_local_costmap"/>
+              <ClearEntireCostmap name="ClearGlobalCostmap-Subtree"
+                                  service_name="global_costmap/clear_entirely_global_costmap"/>
+            </Sequence>
+            <Wait wait_duration="3"/>
+            <BackUp backup_dist="0.15" backup_speed="0.10"/>
+          </RoundRobin>
+        </ReactiveFallback>
 
-      <!-- ========== 恢复行为（保持原样） ========== -->
-      <ReactiveFallback name="RecoveryFallback">
-        <GoalUpdated/>
-        <RoundRobin name="RecoveryActions">
-          <Sequence name="ClearingActions">
-            <ClearEntireCostmap name="ClearLocalCostmap-Subtree"
-                                service_name="local_costmap/clear_entirely_local_costmap"/>
-            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree"
-                                service_name="global_costmap/clear_entirely_global_costmap"/>
-          </Sequence>
-          <Wait wait_duration="3"/>
-          <BackUp backup_dist="0.30" backup_speed="0.10"/>
-        </RoundRobin>
-      </ReactiveFallback>
+      </RecoveryNode>
 
-    </RecoveryNode>
+    </Sequence>
   </BehaviorTree>
 
 </root>

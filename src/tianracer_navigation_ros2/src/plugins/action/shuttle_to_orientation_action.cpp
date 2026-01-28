@@ -51,6 +51,8 @@ void ShuttleToOrientationAction::initialize()
 
   // 创建发布者
   cmd_vel_pub_ = node_->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+  initialpose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
+    "/initialpose", 10);
 
   // 创建专用的回调组（用于激光雷达订阅）
   callback_group_ = node_->create_callback_group(
@@ -574,13 +576,13 @@ void ShuttleToOrientationAction::correctTFDrift()
       tf2::TimePointZero,
       tf2::durationFromSec(transform_tolerance_));
   } catch (tf2::TransformException & ex) {
-    RCLCPP_WARN(node_->get_logger(), "TF校正失败，无法获取当前位置: %s", ex.what());
+    RCLCPP_WARN(node_->get_logger(), "TF获取失败: %s", ex.what());
     return;
   }
-  
+
   double actual_x = current_tf.transform.translation.x;
   double actual_y = current_tf.transform.translation.y;
-  
+
   tf2::Quaternion q(
     current_tf.transform.rotation.x,
     current_tf.transform.rotation.y,
@@ -589,48 +591,128 @@ void ShuttleToOrientationAction::correctTFDrift()
   tf2::Matrix3x3 m(q);
   double roll, pitch, actual_yaw;
   m.getRPY(roll, pitch, actual_yaw);
-  
-  // 计算差异
-  double dx = actual_x - theoretical_x_;
-  double dy = actual_y - theoretical_y_;
-  double position_error = std::sqrt(dx * dx + dy * dy);
-  
-  // 计算角度差异（处理 -π 到 π 的边界）
-  double yaw_error = actual_yaw - theoretical_yaw_;
-  while (yaw_error > M_PI) yaw_error -= 2 * M_PI;
-  while (yaw_error < -M_PI) yaw_error += 2 * M_PI;
-  
+
+  // 只输出当前 TF 位置，不做任何修正
   RCLCPP_INFO(node_->get_logger(),
-    "【TF校正】周期%d: 理论(%.3f,%.3f,%.1f°) vs 实际(%.3f,%.3f,%.1f°), "
-    "位置误差=%.3fm, 角度误差=%.1f°",
+    "【当前TF】周期%d: 位置(%.3f, %.3f), 朝向=%.1f°",
     shuttle_cycle_count_,
-    theoretical_x_, theoretical_y_, theoretical_yaw_ * 180.0 / M_PI,
-    actual_x, actual_y, actual_yaw * 180.0 / M_PI,
-    position_error, yaw_error * 180.0 / M_PI);
-  
-  // 如果误差超过阈值，进行修正
-  if (position_error > TF_POSITION_TOLERANCE || std::abs(yaw_error) > TF_YAW_TOLERANCE) {
-    // 策略：取理论值和实际值的中间值
-    // 位置：使用加权平均（偏向实际值，因为TF通常更可信）
-    double weight_actual = 0.7;  // 实际值权重
-    double corrected_x = theoretical_x_ * (1 - weight_actual) + actual_x * weight_actual;
-    double corrected_y = theoretical_y_ * (1 - weight_actual) + actual_y * weight_actual;
-    
-    // 朝向：取中间值
-    double corrected_yaw = theoretical_yaw_ + yaw_error * 0.5;
-    
-    RCLCPP_WARN(node_->get_logger(),
-      "【TF修正】误差过大! 修正后位置(%.3f,%.3f,%.1f°)",
-      corrected_x, corrected_y, corrected_yaw * 180.0 / M_PI);
-    
-    // 更新理论值为修正后的值
-    theoretical_x_ = corrected_x;
-    theoretical_y_ = corrected_y;
-    theoretical_yaw_ = corrected_yaw;
-    
-    // TODO: 如果有重定位服务（如 AMCL 的 global_localization），可以在这里调用
-    // 但朝向可能无法精确重定位，所以这里采用折中方案
+    actual_x, actual_y, actual_yaw * 180.0 / M_PI);
+}
+
+void ShuttleToOrientationAction::resetAMCLWithTheoreticalPose()
+{
+  // 用理论计算的 x, y 位置 + 跳变前的 yaw 来重置 AMCL
+  geometry_msgs::msg::PoseWithCovarianceStamped initialpose;
+  initialpose.header.stamp = node_->get_clock()->now();
+  initialpose.header.frame_id = global_frame_;
+
+  // 使用理论位置
+  initialpose.pose.pose.position.x = theoretical_x_;
+  initialpose.pose.pose.position.y = theoretical_y_;
+  initialpose.pose.pose.position.z = 0.0;
+
+  // 使用跳变前的有效 yaw（不用理论值，因为理论值累积误差大）
+  tf2::Quaternion q;
+  q.setRPY(0.0, 0.0, last_valid_yaw_);
+  initialpose.pose.pose.orientation.x = q.x();
+  initialpose.pose.pose.orientation.y = q.y();
+  initialpose.pose.pose.orientation.z = q.z();
+  initialpose.pose.pose.orientation.w = q.w();
+
+  // 设置协方差（较小的值表示较高的置信度）
+  // 协方差矩阵是 6x6，对角线元素分别是 x, y, z, roll, pitch, yaw 的方差
+  for (int i = 0; i < 36; ++i) {
+    initialpose.pose.covariance[i] = 0.0;
   }
+  initialpose.pose.covariance[0] = 0.05;   // x 方差
+  initialpose.pose.covariance[7] = 0.05;   // y 方差
+  initialpose.pose.covariance[35] = 0.02;  // yaw 方差
+
+  initialpose_pub_->publish(initialpose);
+
+  RCLCPP_WARN(node_->get_logger(),
+    "【AMCL重置】发布位置: (%.3f, %.3f), yaw=%.1f° (理论x,y + 跳变前yaw)",
+    theoretical_x_, theoretical_y_, last_valid_yaw_ * 180.0 / M_PI);
+}
+
+void ShuttleToOrientationAction::computeConstrainedFinalPose(
+    double final_x, double final_y,
+    double& constrained_x, double& constrained_y, double& constrained_yaw)
+{
+  // 计算预期位置和初始位置的距离
+  double dx = final_x - initial_x_;
+  double dy = final_y - initial_y_;
+  double distance = std::sqrt(dx * dx + dy * dy);
+
+  const double max_distance = 0.6;  // 最大允许距离
+
+  if (distance > max_distance) {
+    // 超过阈值，限制在方向上的 0.6m 处
+    double direction = std::atan2(dy, dx);  // 从初始位置指向预期位置的方向
+    constrained_x = initial_x_ + max_distance * std::cos(direction);
+    constrained_y = initial_y_ + max_distance * std::sin(direction);
+
+    RCLCPP_WARN(node_->get_logger(),
+      "【位置限制】预期位置(%.3f, %.3f)距离初始位置%.2fm > 0.6m，限制到(%.3f, %.3f)",
+      final_x, final_y, distance, constrained_x, constrained_y);
+  } else {
+    // 未超过阈值，使用原始位置
+    constrained_x = final_x;
+    constrained_y = final_y;
+  }
+
+  // yaw 设置为初始角度的相反方向
+  constrained_yaw = initial_yaw_ + M_PI;
+  // 归一化到 [-π, π]
+  while (constrained_yaw > M_PI) constrained_yaw -= 2.0 * M_PI;
+  while (constrained_yaw < -M_PI) constrained_yaw += 2.0 * M_PI;
+}
+
+double ShuttleToOrientationAction::getOdomYaw()
+{
+  // 获取 odom -> base_link 的 TF（里程计，不受 AMCL 跳变影响）
+  geometry_msgs::msg::TransformStamped odom_tf;
+  try {
+    odom_tf = tf_buffer_->lookupTransform(
+      "odom", robot_base_frame_,
+      tf2::TimePointZero,
+      tf2::durationFromSec(transform_tolerance_));
+  } catch (tf2::TransformException & ex) {
+    RCLCPP_WARN(node_->get_logger(), "获取 odom TF 失败: %s", ex.what());
+    return 0.0;
+  }
+
+  tf2::Quaternion q(
+    odom_tf.transform.rotation.x,
+    odom_tf.transform.rotation.y,
+    odom_tf.transform.rotation.z,
+    odom_tf.transform.rotation.w);
+  tf2::Matrix3x3 m(q);
+  double roll, pitch, yaw;
+  m.getRPY(roll, pitch, yaw);
+
+  return yaw;
+}
+
+double ShuttleToOrientationAction::computeAngleToGoalFromOdom()
+{
+  // 用 odom 的相对角度变化来估算当前 angle_to_goal
+  // 公式: 当前角度差 = 初始角度差 - 累计转过的角度
+  double current_odom_yaw = getOdomYaw();
+  double yaw_change = current_odom_yaw - odom_initial_yaw_;
+
+  // 处理 -π 到 π 的边界
+  while (yaw_change > M_PI) yaw_change -= 2 * M_PI;
+  while (yaw_change < -M_PI) yaw_change += 2 * M_PI;
+
+  // 当前角度差 = 初始角度差 - 转过的角度
+  double estimated_angle = initial_angle_to_goal_ - (yaw_change * 180.0 / M_PI);
+
+  // 归一化到 -180 到 180
+  while (estimated_angle > 180.0) estimated_angle -= 360.0;
+  while (estimated_angle < -180.0) estimated_angle += 360.0;
+
+  return estimated_angle;
 }
 
 BT::NodeStatus ShuttleToOrientationAction::onStart()
@@ -655,7 +737,10 @@ BT::NodeStatus ShuttleToOrientationAction::onStart()
   distance_traveled_ = 0.0;
   turn_direction_ = 0;  // 重置转向方向
   max_forward_distance_ = forward_distance_;  // 初始化前进距离
+  max_backward_distance_ = backward_distance_;  // 初始化后退距离
   need_backup_first_ = false;  // 重置后退标志
+  need_pre_forward_before_backward_ = false;  // 重置后退前预前进标志
+  pre_forward_before_backward_dist_ = 0.0;  // 重置后退前预前进距离
   pre_forward_distance_ = 0.0;  // 重置预前进距离
   front_obstacle_distance_ = 0.0;  // 重置前方障碍物距离
   shuttle_cycle_count_ = 0;  // 重置周期计数
@@ -665,9 +750,17 @@ BT::NodeStatus ShuttleToOrientationAction::onStart()
   theoretical_y_ = 0.0;
   theoretical_yaw_ = 0.0;
 
+  // 初始化 odom 跟踪变量
+  initial_angle_to_goal_ = computeAngleToGoal();  // 记录初始角度差
+  odom_initial_yaw_ = 0.0;  // 稍后在 DETECT_CLEAR_SIDE 中设置
+  odom_accumulated_yaw_ = 0.0;
+  last_amcl_angle_ = initial_angle_to_goal_;  // 初始化上次 AMCL 角度
+  last_valid_yaw_ = 0.0;  // 稍后在 DETECT_CLEAR_SIDE 中设置
+  amcl_jump_detected_ = false;  // 初始化跳变标志
+
   RCLCPP_INFO(node_->get_logger(),
-    "开始 Shuttle 调整朝向 (阈值: %.1f°, 超时: %.1fs)",
-    angle_threshold_, timeout_);
+    "开始 Shuttle 调整朝向 (阈值: %.1f°, 超时: %.1fs, 初始角度差: %.1f°)",
+    angle_threshold_, timeout_, initial_angle_to_goal_);
 
   return BT::NodeStatus::RUNNING;
 }
@@ -683,12 +776,65 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
     return BT::NodeStatus::FAILURE;
   }
 
-  // 首先检查目标是否已在前方
+  // 首先检查目标是否已在前方（使用 AMCL，但要检测跳变）
   double angle_to_goal = computeAngleToGoal();
-  if (std::abs(angle_to_goal) <= angle_threshold_) {
+
+  // 计算角度变化，检测跳变
+  double angle_change = std::abs(last_amcl_angle_ - angle_to_goal);
+  if (angle_change > 180.0) angle_change = 360.0 - angle_change;
+  bool amcl_jumped = (angle_change > 70.0);
+
+  // 只有在没有跳变的情况下才进行快速检查
+  if (!amcl_jumped && std::abs(angle_to_goal) <= angle_threshold_) {
     RCLCPP_INFO(node_->get_logger(),
       "目标已在前方 (角度: %.1f°), Shuttle 完成", angle_to_goal);
     stopRobot();
+
+    // 发布限制后的位置到 initialpose，确保 AMCL 定位准确
+    try {
+      auto final_tf = tf_buffer_->lookupTransform(
+        global_frame_, robot_base_frame_,
+        tf2::TimePointZero,
+        tf2::durationFromSec(transform_tolerance_));
+
+      // 计算限制后的位置
+      double constrained_x, constrained_y, constrained_yaw;
+      computeConstrainedFinalPose(
+        final_tf.transform.translation.x,
+        final_tf.transform.translation.y,
+        constrained_x, constrained_y, constrained_yaw);
+
+      geometry_msgs::msg::PoseWithCovarianceStamped finalpose;
+      finalpose.header.stamp = node_->get_clock()->now();
+      finalpose.header.frame_id = global_frame_;
+      finalpose.pose.pose.position.x = constrained_x;
+      finalpose.pose.pose.position.y = constrained_y;
+      finalpose.pose.pose.position.z = 0.0;
+
+      // 使用限制后的 yaw（初始角度的相反方向）
+      tf2::Quaternion q;
+      q.setRPY(0.0, 0.0, constrained_yaw);
+      finalpose.pose.pose.orientation.x = q.x();
+      finalpose.pose.pose.orientation.y = q.y();
+      finalpose.pose.pose.orientation.z = q.z();
+      finalpose.pose.pose.orientation.w = q.w();
+
+      for (int i = 0; i < 36; ++i) {
+        finalpose.pose.covariance[i] = 0.0;
+      }
+      finalpose.pose.covariance[0] = 0.02;
+      finalpose.pose.covariance[7] = 0.02;
+      finalpose.pose.covariance[35] = 0.01;
+
+      initialpose_pub_->publish(finalpose);
+
+      RCLCPP_INFO(node_->get_logger(),
+        "【Shuttle完成】发布最终位置: (%.3f, %.3f), yaw=%.1f°",
+        constrained_x, constrained_y, constrained_yaw * 180.0 / M_PI);
+    } catch (tf2::TransformException & ex) {
+      RCLCPP_WARN(node_->get_logger(), "无法获取最终位置: %s", ex.what());
+    }
+
     return BT::NodeStatus::SUCCESS;
   }
 
@@ -748,15 +894,22 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
           double roll, pitch, yaw;
           m.getRPY(roll, pitch, yaw);
           initial_yaw_ = yaw;
-          
+
           // 理论值初始化为与初始位置相同
           theoretical_x_ = initial_x_;
           theoretical_y_ = initial_y_;
           theoretical_yaw_ = initial_yaw_;
-          
-          RCLCPP_INFO(node_->get_logger(), 
-            "【理论位置初始化】x=%.3f, y=%.3f, yaw=%.1f°",
-            initial_x_, initial_y_, initial_yaw_ * 180.0 / M_PI);
+
+          // 初始化跳变前的有效 yaw
+          last_valid_yaw_ = initial_yaw_;
+
+          // 记录初始 odom yaw（用于跟踪相对角度变化）
+          odom_initial_yaw_ = getOdomYaw();
+
+          RCLCPP_INFO(node_->get_logger(),
+            "【理论位置初始化】x=%.3f, y=%.3f, yaw=%.1f°, odom_yaw=%.1f°",
+            initial_x_, initial_y_, initial_yaw_ * 180.0 / M_PI,
+            odom_initial_yaw_ * 180.0 / M_PI);
         } catch (tf2::TransformException & ex) {
           RCLCPP_WARN(node_->get_logger(), "无法获取初始位置: %s", ex.what());
         }
@@ -766,13 +919,15 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
           // 检查前方是否还有空间可以先前进（> 0.3m时先前进利用空间）
           if (front_obstacle_distance_ > 0.30) {
             pre_forward_distance_ = front_obstacle_distance_ - 0.05;  // 留5cm安全距离
-            pre_forward_distance_ = std::min(pre_forward_distance_, 0.50);  // 最大0.5m
-            RCLCPP_INFO(node_->get_logger(), 
-              "前方有%.2fm空间，先直线前进%.2fm再后退", 
+            // 预前进距离不应超过转向前进距离，否则浪费时间在直线移动上
+            pre_forward_distance_ = std::min(pre_forward_distance_, max_forward_distance_);
+            pre_forward_distance_ = std::min(pre_forward_distance_, 0.30);  // 最大0.3m
+            RCLCPP_INFO(node_->get_logger(),
+              "前方有%.2fm空间，先直线前进%.2fm再后退",
               front_obstacle_distance_, pre_forward_distance_);
             state_ = ShuttleState::PRE_FORWARD_STRAIGHT;
           } else {
-            RCLCPP_INFO(node_->get_logger(), "前方空间不足(%.2fm)，需要先后退 0.1m", 
+            RCLCPP_INFO(node_->get_logger(), "前方空间不足(%.2fm)，需要先后退 0.1m",
               front_obstacle_distance_);
             state_ = ShuttleState::INITIAL_BACKUP;
           }
@@ -944,6 +1099,9 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
           theoretical_x_ += dx_theo * std::cos(theoretical_yaw_) - dy_theo * std::sin(theoretical_yaw_);
           theoretical_y_ += dx_theo * std::sin(theoretical_yaw_) + dy_theo * std::cos(theoretical_yaw_);
           theoretical_yaw_ += dtheta_theo * turn_direction_;
+          // 归一化 yaw 到 [-π, π]
+          while (theoretical_yaw_ > M_PI) theoretical_yaw_ -= 2.0 * M_PI;
+          while (theoretical_yaw_ < -M_PI) theoretical_yaw_ += 2.0 * M_PI;
           
           stopRobot();
           state_ = ShuttleState::PAUSE_AFTER_FORWARD;
@@ -959,7 +1117,70 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
     case ShuttleState::PAUSE_AFTER_FORWARD:
       {
         if (state_elapsed_sec >= 0.3) {
-          state_ = ShuttleState::BACKWARD_TURN;
+          // 检测前方空间，决定后退策略
+          spinLaserCallback();
+          double front_dist = getMinDistanceInSector(-15.0, 15.0);
+          double lidar_to_front = 0.33;
+          double available_front = front_dist - lidar_to_front;
+
+          // 想要后退的距离 = 前进距离（理想情况）
+          double desired_backward = actual_forward_distance_;
+          // 限制在参数范围内
+          desired_backward = std::min(desired_backward, backward_distance_);
+
+          // 最小后退 0.1m
+          double min_backward = 0.10;
+
+          if (desired_backward <= min_backward) {
+            // 只需要后退最小距离，直接后退
+            max_backward_distance_ = min_backward;
+            need_pre_forward_before_backward_ = false;
+            RCLCPP_INFO(node_->get_logger(),
+              "【后退准备】目标后退=%.2fm，直接后退", max_backward_distance_);
+          } else {
+            // 想后退更多，检查前方是否有空间可以先前进
+            double extra_backward_needed = desired_backward - min_backward;  // 超出最小值的部分
+            // 限制预前进距离不超过转向前进距离
+            extra_backward_needed = std::min(extra_backward_needed, max_forward_distance_);
+            extra_backward_needed = std::min(extra_backward_needed, 0.20);  // 最大0.2m
+
+            if (extra_backward_needed >= 0.05 && available_front >= extra_backward_needed + 0.05) {
+              // 前方有足够空间，先前进再后退
+              pre_forward_before_backward_dist_ = extra_backward_needed;
+              max_backward_distance_ = min_backward + extra_backward_needed;
+              need_pre_forward_before_backward_ = true;
+              RCLCPP_INFO(node_->get_logger(),
+                "【后退准备】前方有%.2fm空间，先直线前进%.2fm，再后退%.2fm",
+                available_front, pre_forward_before_backward_dist_, max_backward_distance_);
+            } else if (extra_backward_needed >= 0.05 && available_front > 0.10) {
+              // 前方有一些空间，利用它
+              pre_forward_before_backward_dist_ = std::min(available_front - 0.05, extra_backward_needed);
+              max_backward_distance_ = min_backward + pre_forward_before_backward_dist_;
+              need_pre_forward_before_backward_ = (pre_forward_before_backward_dist_ >= 0.05);
+              if (need_pre_forward_before_backward_) {
+                RCLCPP_INFO(node_->get_logger(),
+                  "【后退准备】前方空间有限(%.2fm)，先前进%.2fm，再后退%.2fm",
+                  available_front, pre_forward_before_backward_dist_, max_backward_distance_);
+              } else {
+                max_backward_distance_ = min_backward;
+                RCLCPP_INFO(node_->get_logger(),
+                  "【后退准备】前方空间太小，只后退%.2fm", max_backward_distance_);
+              }
+            } else {
+              // 前方没有空间或不需要预前进，只能后退最小距离
+              max_backward_distance_ = min_backward;
+              need_pre_forward_before_backward_ = false;
+              RCLCPP_INFO(node_->get_logger(),
+                "【后退准备】前方无空间，只后退%.2fm", max_backward_distance_);
+            }
+          }
+
+          // 决定下一个状态
+          if (need_pre_forward_before_backward_) {
+            state_ = ShuttleState::PRE_FORWARD_BEFORE_BACKWARD;
+          } else {
+            state_ = ShuttleState::BACKWARD_TURN;
+          }
           state_start_time_ = std::chrono::steady_clock::now();
           distance_traveled_ = 0.0;
 
@@ -971,6 +1192,65 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
           } catch (tf2::TransformException & ex) {
             RCLCPP_WARN(node_->get_logger(), "无法获取位置: %s", ex.what());
           }
+        }
+      }
+      break;
+
+    case ShuttleState::PRE_FORWARD_BEFORE_BACKWARD:
+      {
+        // 后退前先直线前进，利用前方空间来增加后退距离
+        try {
+          auto current_transform = tf_buffer_->lookupTransform(
+            global_frame_, robot_base_frame_,
+            tf2::TimePointZero,
+            tf2::durationFromSec(transform_tolerance_));
+
+          double dx = current_transform.transform.translation.x -
+                      last_transform_.transform.translation.x;
+          double dy = current_transform.transform.translation.y -
+                      last_transform_.transform.translation.y;
+          distance_traveled_ = std::sqrt(dx * dx + dy * dy);
+        } catch (tf2::TransformException & ex) {
+          distance_traveled_ = speed_ * state_elapsed_sec;
+        }
+
+        if (distance_traveled_ >= pre_forward_before_backward_dist_) {
+          RCLCPP_INFO(node_->get_logger(),
+            "【后退前预前进完成】距离: %.2fm", distance_traveled_);
+          stopRobot();
+
+          // 更新理论位置（直线前进）
+          theoretical_x_ += distance_traveled_ * std::cos(theoretical_yaw_);
+          theoretical_y_ += distance_traveled_ * std::sin(theoretical_yaw_);
+
+          state_ = ShuttleState::PAUSE_AFTER_PRE_FORWARD_BB;
+          state_start_time_ = std::chrono::steady_clock::now();
+        } else {
+          // 直线前进（不转向）
+          publishVelocity(speed_, 0.0);
+        }
+      }
+      break;
+
+    case ShuttleState::PAUSE_AFTER_PRE_FORWARD_BB:
+      {
+        if (state_elapsed_sec >= 0.3) {
+          // 记录新的位置
+          try {
+            last_transform_ = tf_buffer_->lookupTransform(
+              global_frame_, robot_base_frame_,
+              tf2::TimePointZero,
+              tf2::durationFromSec(transform_tolerance_));
+          } catch (tf2::TransformException & ex) {
+            RCLCPP_WARN(node_->get_logger(), "无法获取位置: %s", ex.what());
+          }
+
+          RCLCPP_INFO(node_->get_logger(),
+            "开始后退 %.2fm（包含预前进的距离）", max_backward_distance_);
+
+          state_ = ShuttleState::BACKWARD_TURN;
+          state_start_time_ = std::chrono::steady_clock::now();
+          distance_traveled_ = 0.0;
         }
       }
       break;
@@ -992,16 +1272,10 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
           distance_traveled_ = speed_ * state_elapsed_sec;
         }
 
-        // 后退距离 = 前进距离（回到原来的 x 位置，因为原来位置是空的）
-        // 这样每次 shuttle 完整周期后：
-        //   - x 位置大致回到原点
-        //   - y 位置有一定偏移（这是正常的）
-        //   - 朝向累积 2θ 的变化（θ = d * tan(δ) / L）
-        double backward_target = actual_forward_distance_;
-        // 最小后退 0.1m，最大不超过 backward_distance_ 参数
-        backward_target = std::max(0.1, std::min(backward_target, backward_distance_));
+        // 使用之前计算好的后退目标距离
+        double backward_target = max_backward_distance_;
 
-        // 计算这次 shuttle 周期预计的角度变化
+        // 计算这次 shuttle 周期预计的角度变化（基于实际前进距离）
         double angle_per_cycle = 2.0 * computeAngleChange(actual_forward_distance_, steering_angle_) * 180.0 / M_PI;
 
         if (distance_traveled_ >= backward_target) {
@@ -1016,6 +1290,9 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
           theoretical_x_ += dx_theo * std::cos(theoretical_yaw_) - dy_theo * std::sin(theoretical_yaw_);
           theoretical_y_ += dx_theo * std::sin(theoretical_yaw_) + dy_theo * std::cos(theoretical_yaw_);
           theoretical_yaw_ += dtheta_theo * turn_direction_;  // 倒车时继续同向累积
+          // 归一化 yaw 到 [-π, π]
+          while (theoretical_yaw_ > M_PI) theoretical_yaw_ -= 2.0 * M_PI;
+          while (theoretical_yaw_ < -M_PI) theoretical_yaw_ += 2.0 * M_PI;
           
           shuttle_cycle_count_++;
           
@@ -1042,17 +1319,133 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
 
     case ShuttleState::CHECK_ORIENTATION:
       {
-        // 检查朝向，如果还没对准，继续下一个周期
-        double current_angle = computeAngleToGoal();
+        // 获取 AMCL 的角度
+        double amcl_angle = computeAngleToGoal();
+
+        // 计算这个周期 AMCL 角度的变化量
+        double amcl_change = std::abs(last_amcl_angle_ - amcl_angle);
+        // 处理 -180 到 180 的边界
+        if (amcl_change > 180.0) amcl_change = 360.0 - amcl_change;
+
+        // 理论上每个周期最多转约 50°，如果 AMCL 变化超过 70°，认为是跳变
+        bool amcl_jumped = (amcl_change > 70.0);
+
+        // 如果之前检测到跳变，检查是否已经等待足够时间
+        if (amcl_jump_detected_) {
+          auto jump_elapsed = std::chrono::steady_clock::now() - amcl_jump_time_;
+          double jump_wait_sec = std::chrono::duration<double>(jump_elapsed).count();
+
+          if (jump_wait_sec < 2.0) {
+            // 还在等待中，继续等待
+            RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 500,
+              "AMCL 跳变后等待中... (%.1fs/2.0s)", jump_wait_sec);
+            stopRobot();
+            break;
+          } else {
+            // 等待时间到，接受当前 AMCL 值，继续 shuttle
+            RCLCPP_INFO(node_->get_logger(),
+              "AMCL 跳变等待结束，接受当前角度: %.1f°，继续 shuttle", amcl_angle);
+            amcl_jump_detected_ = false;
+            last_amcl_angle_ = amcl_angle;  // 接受跳变后的值
+            // 继续执行下面的逻辑
+          }
+        }
+
         RCLCPP_INFO(node_->get_logger(),
-          "【周期%d完成】当前角度差: %.1f°, 阈值: %.1f°", 
-          shuttle_cycle_count_, current_angle, angle_threshold_);
-        
-        // 每个周期完成后进行 TF 校正
+          "【周期%d完成】AMCL角度差: %.1f° (变化: %.1f°%s), 阈值: %.1f°",
+          shuttle_cycle_count_, amcl_angle, amcl_change,
+          amcl_jumped ? ", 跳变!" : "", angle_threshold_);
+
+        // 每个周期完成后输出 TF 信息，并获取当前 yaw
         correctTFDrift();
 
-        if (std::abs(current_angle) <= angle_threshold_) {
-          RCLCPP_INFO(node_->get_logger(), "朝向调整完成!");
+        // 如果 AMCL 跳变了，用理论位置 + 跳变前的 yaw 重置 AMCL
+        if (amcl_jumped && !amcl_jump_detected_) {
+          RCLCPP_WARN(node_->get_logger(),
+            "AMCL 跳变! 用理论位置 + 跳变前yaw重置 AMCL，等待 2 秒后继续...");
+          stopRobot();
+
+          // 用理论位置 + 跳变前的 yaw 重置 AMCL
+          resetAMCLWithTheoreticalPose();
+
+          amcl_jump_detected_ = true;
+          amcl_jump_time_ = std::chrono::steady_clock::now();
+          break;
+        }
+
+        // 没有跳变时，保存当前有效的 yaw（用于下次跳变时恢复）
+        try {
+          auto current_tf = tf_buffer_->lookupTransform(
+            global_frame_, robot_base_frame_,
+            tf2::TimePointZero,
+            tf2::durationFromSec(transform_tolerance_));
+          tf2::Quaternion q(
+            current_tf.transform.rotation.x,
+            current_tf.transform.rotation.y,
+            current_tf.transform.rotation.z,
+            current_tf.transform.rotation.w);
+          tf2::Matrix3x3 m(q);
+          double roll, pitch, yaw;
+          m.getRPY(roll, pitch, yaw);
+          last_valid_yaw_ = yaw;
+        } catch (tf2::TransformException & ex) {
+          // 获取失败时保持上次的值
+        }
+
+        // 更新上次 AMCL 角度
+        last_amcl_angle_ = amcl_angle;
+
+        // 如果 AMCL 没有跳变，使用 AMCL 角度判断
+        if (std::abs(amcl_angle) <= angle_threshold_) {
+          RCLCPP_INFO(node_->get_logger(), "朝向调整完成! (AMCL: %.1f°)", amcl_angle);
+
+          // 在完成前，用限制后的位置重新发布 initialpose，确保 AMCL 定位准确
+          // 这样可以避免 costmap 中机器人位置不准确导致规划失败
+          try {
+            auto final_tf = tf_buffer_->lookupTransform(
+              global_frame_, robot_base_frame_,
+              tf2::TimePointZero,
+              tf2::durationFromSec(transform_tolerance_));
+
+            // 计算限制后的位置
+            double constrained_x, constrained_y, constrained_yaw;
+            computeConstrainedFinalPose(
+              final_tf.transform.translation.x,
+              final_tf.transform.translation.y,
+              constrained_x, constrained_y, constrained_yaw);
+
+            geometry_msgs::msg::PoseWithCovarianceStamped finalpose;
+            finalpose.header.stamp = node_->get_clock()->now();
+            finalpose.header.frame_id = global_frame_;
+            finalpose.pose.pose.position.x = constrained_x;
+            finalpose.pose.pose.position.y = constrained_y;
+            finalpose.pose.pose.position.z = 0.0;
+
+            // 使用限制后的 yaw（初始角度的相反方向）
+            tf2::Quaternion q;
+            q.setRPY(0.0, 0.0, constrained_yaw);
+            finalpose.pose.pose.orientation.x = q.x();
+            finalpose.pose.pose.orientation.y = q.y();
+            finalpose.pose.pose.orientation.z = q.z();
+            finalpose.pose.pose.orientation.w = q.w();
+
+            // 设置较小的协方差，表示高置信度
+            for (int i = 0; i < 36; ++i) {
+              finalpose.pose.covariance[i] = 0.0;
+            }
+            finalpose.pose.covariance[0] = 0.02;   // x 方差
+            finalpose.pose.covariance[7] = 0.02;   // y 方差
+            finalpose.pose.covariance[35] = 0.01;  // yaw 方差
+
+            initialpose_pub_->publish(finalpose);
+
+            RCLCPP_INFO(node_->get_logger(),
+              "【Shuttle完成】发布最终位置: (%.3f, %.3f), yaw=%.1f° 以确保定位准确",
+              constrained_x, constrained_y, constrained_yaw * 180.0 / M_PI);
+          } catch (tf2::TransformException & ex) {
+            RCLCPP_WARN(node_->get_logger(), "无法获取最终位置: %s", ex.what());
+          }
+
           return BT::NodeStatus::SUCCESS;
         }
 
@@ -1086,13 +1479,15 @@ BT::NodeStatus ShuttleToOrientationAction::onRunning()
           // 检查前方是否还有空间可以先前进（> 0.3m时先前进利用空间）
           if (front_obstacle_distance_ > 0.30) {
             pre_forward_distance_ = front_obstacle_distance_ - 0.05;  // 留5cm安全距离
-            pre_forward_distance_ = std::min(pre_forward_distance_, 0.50);  // 最大0.5m
-            RCLCPP_INFO(node_->get_logger(), 
-              "前方有%.2fm空间，先直线前进%.2fm再后退", 
+            // 预前进距离不应超过转向前进距离，否则浪费时间在直线移动上
+            pre_forward_distance_ = std::min(pre_forward_distance_, max_forward_distance_);
+            pre_forward_distance_ = std::min(pre_forward_distance_, 0.30);  // 最大0.3m
+            RCLCPP_INFO(node_->get_logger(),
+              "前方有%.2fm空间，先直线前进%.2fm再后退",
               front_obstacle_distance_, pre_forward_distance_);
             state_ = ShuttleState::PRE_FORWARD_STRAIGHT;
           } else {
-            RCLCPP_INFO(node_->get_logger(), "前方空间不足(%.2fm)，需要先后退 0.1m", 
+            RCLCPP_INFO(node_->get_logger(), "前方空间不足(%.2fm)，需要先后退 0.1m",
               front_obstacle_distance_);
             state_ = ShuttleState::INITIAL_BACKUP;
           }

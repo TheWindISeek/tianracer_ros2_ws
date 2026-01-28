@@ -179,3 +179,33 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - Steve Macenski for slam_toolbox
 - ROS2 community
 
+# hardware info
+RoboMaster C620 
+
+HP8-U45
+
+STM32
+
+AGX Xavier
+
+atti/gps
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| wheelbase_ | 0.40m | 轴距 L |
+| track_width_ | 0.27m | 轮距 W |
+| front_overhang_ | 0.13m | 前悬 |
+| rear_overhang_ | 0.07m | 后悬 |
+| lidar_x_offset_ | 0.20m | 激光雷达在 base_link 前方的偏移 |
+
+# TO-DO
+当前的根本问题是如何解决小车在狭窄空间内的规划/移动和定位
+这几个问题都是一体的
+
+根本问题还是odom计数不准确，而amcl即使增加粒子数也定位不准确
+再加上这个过程本身是不断旋转，导致误差不断累计，而这个功能就是为了将小车完全倒到完全相反的方向，故而尤其难以使用。
+
+但是在仿真里面这个算法就没有什么问题，无非是仿真里面的这个图窄了一点，不够智能。
+但是换了一个空旷的地方，这个就搞得定了
+
+后续的思路是基于摄像头做点东西，但是好像图像没法传过来，估计只能先到那边进行一些处理了再到这边想办法。

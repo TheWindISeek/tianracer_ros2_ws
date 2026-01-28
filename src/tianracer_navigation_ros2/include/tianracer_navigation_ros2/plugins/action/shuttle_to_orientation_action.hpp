@@ -13,6 +13,7 @@
 #include "behaviortree_cpp_v3/action_node.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
@@ -182,10 +183,43 @@ private:
    */
   void correctTFDrift();
 
+  /**
+   * @brief 获取 odom 坐标系下的 yaw 角度
+   * @return yaw 角度 (弧度)
+   */
+  double getOdomYaw();
+
+  /**
+   * @brief 用 odom 的相对角度变化来估算当前 angle_to_goal
+   * 不受 AMCL 跳变影响
+   * @return 估算的 angle_to_goal (度)
+   */
+  double computeAngleToGoalFromOdom();
+
+  /**
+   * @brief 用理论位置重置 AMCL
+   * 当检测到 AMCL 跳变时调用
+   */
+  void resetAMCLWithTheoreticalPose();
+
+  /**
+   * @brief 计算限制后的最终位置
+   * 如果预期位置距离初始位置超过阈值，则限制在该方向上的阈值距离处
+   * @param final_x 预期的最终 x 位置
+   * @param final_y 预期的最终 y 位置
+   * @param constrained_x 输出：限制后的 x 位置
+   * @param constrained_y 输出：限制后的 y 位置
+   * @param constrained_yaw 输出：限制后的 yaw（初始角度的相反方向）
+   */
+  void computeConstrainedFinalPose(double final_x, double final_y,
+                                    double& constrained_x, double& constrained_y,
+                                    double& constrained_yaw);
+
   rclcpp::Node::SharedPtr node_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initialpose_pub_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;  // 专用回调组
 
@@ -214,6 +248,8 @@ private:
     PAUSE_AFTER_INITIAL_BACKUP, // 初始后退后暂停
     FORWARD_TURN,         // 前进+转向
     PAUSE_AFTER_FORWARD,  // 前进后暂停
+    PRE_FORWARD_BEFORE_BACKWARD, // 后退前先直线前进（利用前方空间来增加后退距离）
+    PAUSE_AFTER_PRE_FORWARD_BB, // 后退前预前进后暂停
     BACKWARD_TURN,        // 后退+反向转向
     PAUSE_AFTER_BACKWARD, // 后退后暂停
     CHECK_ORIENTATION,    // 检查朝向
@@ -238,7 +274,10 @@ private:
   double timeout_;
   double max_forward_distance_;  // 激光雷达限制的最大前进距离
   double actual_forward_distance_;  // 实际前进距离，用于后退时保持轨迹重合
+  double max_backward_distance_;  // 本次后退的目标距离
   bool need_backup_first_;  // 是否需要先后退（空间不足时）
+  bool need_pre_forward_before_backward_;  // 后退前是否需要先前进（利用前方空间）
+  double pre_forward_before_backward_dist_;  // 后退前先前进的距离
   
   // 预前进相关（后退前先向前利用空间）
   double pre_forward_distance_;  // 预前进的目标距离
@@ -252,7 +291,18 @@ private:
   double initial_y_;          // 初始y位置
   double initial_yaw_;        // 初始yaw朝向
   int shuttle_cycle_count_;   // shuttle周期计数
-  
+
+  // 用 odom 跟踪相对角度变化（不受 AMCL 跳变影响）
+  double initial_angle_to_goal_;  // Shuttle 开始时的 angle_to_goal
+  double odom_initial_yaw_;       // Shuttle 开始时的 odom yaw
+  double odom_accumulated_yaw_;   // 从 odom 累计的 yaw 变化
+
+  // AMCL 跳变检测
+  double last_amcl_angle_;  // 上一个周期的 AMCL 角度
+  double last_valid_yaw_;   // 跳变前的有效 yaw 朝向（弧度）
+  bool amcl_jump_detected_;  // 是否检测到跳变
+  std::chrono::steady_clock::time_point amcl_jump_time_;  // 跳变发生时间
+
   // TF校正阈值
   static constexpr double TF_POSITION_TOLERANCE = 0.15;  // 位置差异阈值 15cm
   static constexpr double TF_YAW_TOLERANCE = 0.15;       // 朝向差异阈值 ~8.6度

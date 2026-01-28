@@ -103,6 +103,11 @@ def generate_launch_description():
         default_value='0.0',
         description='Odom yaw offset in degrees (固件已设置steering_offset，此处设为0)'
     )
+    tianbot_yaw_scale_arg = DeclareLaunchArgument(
+        'yaw_scale',
+        default_value='0.66',
+        description='Odom yaw scale factor to correct turning angle error (实际角度/odom角度)'
+    )
 
     # ========== 启动 Lidar ==========
     lidar_launch = IncludeLaunchDescription(
@@ -158,6 +163,7 @@ def generate_launch_description():
             'type_verify': LaunchConfiguration('tianbot_type_verify'),
             'publish_tf': LaunchConfiguration('tianbot_publish_tf'),
             'yaw_offset_deg': LaunchConfiguration('yaw_offset_deg'),
+            'yaw_scale': LaunchConfiguration('yaw_scale'),
         }.items()
     )
 
@@ -204,6 +210,7 @@ def generate_launch_description():
         tianbot_type_verify_arg,
         tianbot_publish_tf_arg,
         tianbot_yaw_offset_arg,
+        tianbot_yaw_scale_arg,
 
         # 启动三个节点
         lidar_launch,

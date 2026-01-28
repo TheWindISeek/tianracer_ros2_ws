@@ -1,62 +1,273 @@
-# Nav2 仿真环境参数配置
+# ============================================================================
+# Nav2 真机环境参数配置文件
+# ============================================================================
+# 本文件包含 Nav2 导航系统的所有参数配置
+# 参数说明：
+#   - 每个参数都影响导航系统的特定行为
+#   - 修改参数后需要重新编译并重启节点才能生效
+#   - 建议先理解参数含义再进行调整
+# ============================================================================
 
+# ============================================================================
+# map_server: 地图服务器
+# ============================================================================
+# 功能：加载和发布静态地图（.pgm + .yaml）
+# 影响：提供全局地图信息，供路径规划和定位使用
 map_server:
   ros__parameters:
+    # use_sim_time: 是否使用仿真时间
+    # - False: 使用系统真实时间（真机环境）
+    # - True: 使用 /clock 话题的仿真时间（Gazebo 等）
+    # 影响：时间同步，影响 TF 变换和消息时间戳
     use_sim_time: True
 
+# ============================================================================
+# amcl: 自适应蒙特卡洛定位（Adaptive Monte Carlo Localization）
+# ============================================================================
+# 功能：使用粒子滤波算法确定机器人在地图中的位置
+# 影响：定位精度直接影响路径规划和导航准确性
 amcl:
   ros__parameters:
-    use_sim_time: True
-    min_particles: 500
+    use_sim_time: True  # 是否使用仿真时间（真机环境设为 False）
+
+    # ===== 粒子滤波参数 =====
+    # min_particles: 最小粒子数量
+    # - 作用：定位失败恢复时的最小粒子数
+    # - 影响：值越大，恢复越快但计算量增加
+    # - 调优：定位不稳定时可增加到 1000
+    min_particles: 1500
+
+    # max_particles: 最大粒子数量
+    # - 作用：限制粒子数量上限，控制计算量
+    # - 影响：值越大定位越精确，但 CPU 占用越高
+    # - 调优：大环境（>100m²）建议 2000-5000，小环境 1000-2000
     max_particles: 2000
+
+    # kld_err: KLD 采样误差阈值
+    # - 作用：控制自适应粒子数量调整的精度
+    # - 影响：值越小粒子数越多，定位越精确但计算量越大
+    # - 调优：一般保持 0.01-0.1，定位不稳定时减小
     kld_err: 0.05
+
+    # kld_z: KLD 采样置信度（Z 值）
+    # - 作用：统计置信度，影响粒子数量自适应调整
+    # - 影响：值越大粒子数越多（99% 置信度对应 0.99）
+    # - 调优：一般保持 0.99，不需要修改
     kld_z: 0.99
-    update_min_d: 0.2
-    update_min_a: 0.5
+
+    # ===== 更新触发条件 =====
+    # update_min_d: 最小平移距离阈值（米）
+    # - 作用：机器人移动超过此距离才更新定位
+    # - 影响：值越大更新频率越低，节省计算但响应变慢
+    # - 调优：快速移动机器人可增大到 0.3-0.5，慢速机器人 0.1-0.2
+    update_min_d: 0.1
+
+    # update_min_a: 最小旋转角度阈值（弧度）
+    # - 作用：机器人旋转超过此角度才更新定位
+    # - 影响：值越大更新频率越低
+    # - 调优：一般 0.1-0.2 弧度（约 6-12 度），让转弯时能及时更新
+    update_min_a: 0.1
+
+    # resample_interval: 重采样间隔
+    # - 作用：每 N 次更新才进行一次重采样
+    # - 影响：值越大重采样越少，计算量小但可能定位退化
+    # - 调优：一般保持 1（每次更新都重采样），计算资源紧张时可增大
     resample_interval: 1
-    transform_tolerance: 1.0
+
+    # transform_tolerance: TF 变换容差（秒）
+    # - 作用：允许的 TF 变换时间延迟
+    # - 影响：值越大对时间同步要求越宽松，但可能使用过时数据
+    # - 调优：网络延迟大或 TF 不稳定时可增大到 1.0-2.0
+    transform_tolerance: 4.0
+
+    # ===== 恢复行为参数 =====
+    # recovery_alpha_slow: 慢速恢复因子
+    # - 作用：定位失败时的慢速恢复权重（0=禁用）
+    # - 影响：值越大恢复越慢但更稳定
+    # - 调优：一般设为 0（禁用），需要时可设为 0.001-0.01
     recovery_alpha_slow: 0.0
+
+    # recovery_alpha_fast: 快速恢复因子
+    # - 作用：定位失败时的快速恢复权重（0=禁用）
+    # - 影响：值越大恢复越快但可能不稳定
+    # - 调优：一般设为 0（禁用），需要时可设为 0.1-0.3
     recovery_alpha_fast: 0.0
-    initial_pose_x: 0.5
-    initial_pose_y: 0.5
-    initial_pose_a: 0.0
-    initial_cov_xx: 0.25
-    initial_cov_yy: 0.25
-    initial_cov_aa: 0.07
+
+    # ===== 初始位姿参数 =====
+    # initial_pose.x/y/yaw: 初始位置和朝向
+    # - 作用：AMCL 启动时的初始位姿估计
+    # - 影响：影响定位收敛速度，不准确会导致定位失败
+    # - 调优：应在 RViz2 中使用 "2D Pose Estimate" 设置，这里仅作备用
+    initial_pose:
+      x: 1.0
+      y: 1.7
+      yaw: 3.138
+      z: 0.0
+
+    # initial_cov_xx/yy/aa: 初始位姿协方差
+    # - 作用：初始位姿的不确定性（xx/yy 是位置，aa 是角度）
+    # - 影响：值越大初始不确定性越大，粒子分布越广
+    # - 调优：初始位置不确定时增大（0.5-1.0），确定时减小（0.1-0.25）
+    initial_cov_xx: 0.25  # 位置 X 方向不确定性（米²）
+    initial_cov_yy: 0.25  # 位置 Y 方向不确定性（米²）
+    initial_cov_aa: 0.07  # 角度不确定性（弧度²），约 ±15 度
+
+    # ===== 激光雷达参数 =====
+    # laser_min_range: 最小有效距离（米，-1=使用传感器默认值）
+    # - 作用：忽略过近的激光数据（可能是机器人自身反射）
+    # - 影响：值越大忽略范围越大，避免误检测但可能丢失近距离障碍物
+    # - 调优：机器人半径约 0.2m，建议设为 0.1-0.3
     laser_min_range: -1.0
+
+    # laser_max_range: 最大有效距离（米，-1=使用传感器默认值）
+    # - 作用：忽略过远的激光数据（可能不准确）
+    # - 影响：值越小计算量越小，但可能丢失远距离信息
+    # - 调优：根据激光雷达实际范围设置（如 10-30 米）
     laser_max_range: -1.0
+
+    # laser_max_beams: 使用的最大激光束数量
+    # - 作用：限制用于定位的激光数据量
+    # - 影响：值越大定位越精确但计算量越大
+    # - 调优：高精度激光雷达（如 1080 线）可设为 60-120，低精度 30-60
     laser_max_beams: 60
-    laser_z_hit: 0.95
-    laser_z_short: 0.1
-    laser_z_max: 0.05
-    laser_z_rand: 0.05
-    laser_sigma_hit: 0.2
-    laser_lambda_short: 0.1
-    laser_likelihood_max_dist: 2.0
+
+    # ===== 激光模型参数（likelihood_field 模型）=====
+    # laser_model_type: 激光模型类型
+    # - "beam": 光束模型（精确但计算量大）
+    # - "likelihood_field": 似然场模型（快速且效果好，推荐）
+    # - 影响：定位精度和计算性能
     laser_model_type: "likelihood_field"
+
+    # laser_z_hit: 正确测量的权重（概率之和应为 1.0）
+    # - 作用：激光数据与地图匹配的权重
+    # - 影响：值越大越信任激光数据，定位越精确
+    # - 调优：一般 0.9-0.95，激光数据质量好时增大
+    laser_z_hit: 0.95
+
+    # laser_z_short: 短距离测量权重（可能是障碍物）
+    # - 作用：处理短距离测量的权重
+    # - 影响：值越大越信任短距离数据
+    # - 调优：一般 0.05-0.1
+    laser_z_short: 0.1
+
+    # laser_z_max: 最大距离测量权重（可能是未知区域）
+    # - 作用：处理最大距离测量的权重
+    # - 影响：值越大越信任最大距离数据
+    # - 调优：一般 0.05-0.1
+    laser_z_max: 0.05
+
+    # laser_z_rand: 随机测量权重（噪声）
+    # - 作用：处理随机噪声的权重
+    # - 影响：值越大越容忍噪声，但定位精度下降
+    # - 调优：一般 0.05-0.1，噪声大时可增大
+    laser_z_rand: 0.05
+
+    # laser_sigma_hit: 激光测量标准差（米）
+    # - 作用：激光数据的测量误差模型
+    # - 影响：值越大越容忍误差，但定位精度下降
+    # - 调优：根据激光雷达精度设置（高精度 0.1-0.2，低精度 0.2-0.3）
+    laser_sigma_hit: 0.2
+
+    # laser_lambda_short: 短距离测量衰减系数
+    # - 作用：短距离测量的衰减参数
+    # - 影响：值越大短距离数据影响越大
+    # - 调优：一般保持 0.1，不需要修改
+    laser_lambda_short: 0.1
+
+    # laser_likelihood_max_dist: 似然场最大距离（米）
+    # - 作用：计算似然场的最大距离范围
+    # - 影响：值越大计算量越大，但能处理更远的障碍物
+    # - 调优：一般 1.5-2.5 米，大环境可增大
+    laser_likelihood_max_dist: 2.0
+
+    # ===== 里程计模型参数 =====
+    # odom_model_type: 里程计模型类型
+    # - "diff": 差分驱动模型（适用于差速/阿克曼底盘）
+    # - "omni": 全向驱动模型（适用于全向轮）
+    # - 影响：里程计误差模型，影响定位精度
     odom_model_type: "diff"
-    odom_alpha1: 0.2
-    odom_alpha2: 0.2
-    odom_alpha3: 0.8
-    odom_alpha4: 0.2
-    odom_alpha5: 0.1
+
+    # odom_alpha1-5: 里程计误差参数
+    # - alpha1: 旋转对旋转的影响（rad²）
+    # - alpha2: 平移对旋转的影响（m²/rad²）
+    # - alpha3: 平移对平移的影响（m²）
+    # - alpha4: 旋转对平移的影响（m²/rad²）
+    # - alpha5: 平移对平移的影响（m²，仅全向模型）
+    # - 影响：值越大越不信任里程计，定位更依赖激光
+    # - 调优：里程计精度高时减小（0.1-0.2），精度低时增大（0.5-1.0）
+    odom_alpha1: 0.2  # 旋转→旋转误差
+    odom_alpha2: 0.2  # 平移→旋转误差
+    odom_alpha3: 0.8  # 平移→平移误差（最重要）
+    odom_alpha4: 0.2  # 旋转→平移误差
+    odom_alpha5: 0.1  # 平移→平移误差（全向模型）
+
+    # ===== 坐标系参数 =====
+    # odom_frame_id: 里程计坐标系名称
+    # - 作用：指定里程计发布的坐标系
+    # - 影响：必须与里程计节点发布的 frame_id 一致
+    # - 调优：一般保持 "odom"，不要修改
     odom_frame_id: "odom"
+
+    # base_frame_id: 机器人基座坐标系名称
+    # - 作用：指定机器人基座坐标系
+    # - 影响：必须与 URDF 中的 base_link 一致
+    # - 调优：一般保持 "base_link"，不要修改
     base_frame_id: "base_link"
+
+    # global_frame_id: 全局坐标系名称（地图坐标系）
+    # - 作用：指定地图坐标系
+    # - 影响：必须与 map_server 发布的坐标系一致
+    # - 调优：一般保持 "map"，不要修改
     global_frame_id: "map"
+
+    # scan_topic: 激光雷达话题名称
+    # - 作用：指定订阅的激光雷达数据话题
+    # - 影响：必须与激光雷达节点发布的话题一致
+    # - 调优：根据实际激光雷达话题修改（如 "/scan"）
     scan_topic: "/scan"
+
+    # set_initial_pose: 是否设置初始位姿
+    # - 作用：启动时是否使用 initial_pose_x/y/a 作为初始位姿
+    # - 影响：True 时使用配置的初始位姿，False 时等待手动设置
+    # - 调优：真机环境建议 True，但最好在 RViz2 中手动设置
     set_initial_pose: True
 
+# ============================================================================
+# bt_navigator: 行为树导航器
+# ============================================================================
+# 功能：使用行为树（Behavior Tree）管理导航流程和决策逻辑
+# 影响：控制导航的整体行为，包括路径规划、跟踪、恢复等
 bt_navigator:
   ros__parameters:
     use_sim_time: True
+
     global_frame: "map"
     robot_base_frame: "base_link"
     odom_topic: "/odom"
+
+    # 使用自定义行为树（无 Spin，适合阿克曼底盘）
+    # default_nav_to_pose_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav.xml
+    default_nav_through_poses_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav_through_poses.xml
+    default_nav_to_pose_bt_xml: /home/lucifer/tianracer_ros2_ws/src/tianracer_navigation_ros2/behavior_trees/ackermann_nav_shuttle.xml
+
+
     bt_loop_duration: 10
     default_server_timeout: 20
+
     enable_groot_monitoring: True
     groot_zmq_publisher_port: 1666
+
+    # groot_zmq_server_port: Groot 服务器端口
+    # - 作用：Groot 工具连接服务器的端口
+    # - 影响：必须与 Groot 配置一致
+    # - 调优：一般保持默认值，不需要修改
     groot_zmq_server_port: 1667
+
+    # plugin_lib_names: 行为树插件库名称列表
+    # - 作用：注册可用的行为树节点插件
+    # - 影响：只有在此列表中的插件才能在行为树中使用
+    # - 调优：一般保持默认列表，不需要修改
+    # - 注意：这是 Nav2 标准插件列表，包含所有常用的导航行为树节点
     plugin_lib_names:
     - nav2_compute_path_to_pose_action_bt_node
     - nav2_compute_path_through_poses_action_bt_node
@@ -101,178 +312,723 @@ bt_navigator:
     - nav2_back_up_cancel_bt_node
     - nav2_assisted_teleop_cancel_bt_node
     - nav2_drive_on_heading_cancel_bt_node
+    # Tianracer 自定义行为树节点
+    - tianracer_is_goal_in_front_bt_node
+    - tianracer_shuttle_to_orientation_bt_node
 
+# ============================================================================
+# controller_server: 控制器服务器
+# ============================================================================
+# 功能：局部路径跟踪控制器，将全局路径转换为速度命令
+# 影响：直接影响机器人运动平滑度、避障能力和到达精度
 controller_server:
   ros__parameters:
-    use_sim_time: True
-    controller_frequency: 20.0
+    use_sim_time: True  # 是否使用仿真时间
+
+    # controller_frequency: 控制器运行频率（Hz）
+    # - 作用：控制器计算速度命令的频率
+    # - 影响：值越大控制越平滑但 CPU 占用越高
+    # - 调优：一般 10-20Hz，高速机器人建议 20-30Hz
+    # - 修改：从 20.0 降低到 10.0，减轻系统负载，避免消息队列满
+    controller_frequency: 10.0
+
+    # min_x/y/theta_velocity_threshold: 最小速度阈值
+    # - 作用：低于此速度视为静止
+    # - 影响：值越小越敏感，可能产生微小抖动
+    # - 调优：一般 0.001-0.01，避免过小导致误判
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
+
+    # failure_tolerance: 失败容忍度（0-1）
+    # - 作用：允许的失败率，超过此值认为控制器失败
+    # - 影响：值越大越容忍偶尔失败，但可能掩盖问题
+    # - 调优：一般 0.2-0.4，环境复杂时可增大
     failure_tolerance: 0.3
+
+    # progress_checker_plugin: 进度检查器插件名称
+    # - 作用：检查机器人是否在向目标前进
+    # - 影响：防止机器人卡住不动
+    # - 调优：一般保持 "progress_checker"，不要修改
     progress_checker_plugin: "progress_checker"
+
+    # goal_checker_plugins: 目标检查器插件列表
+    # - 作用：检查是否到达目标点
+    # - 影响：决定何时认为导航完成
+    # - 调优：可添加多个检查器（如 ["general_goal_checker", "precise_goal_checker"]）
     goal_checker_plugins: ["general_goal_checker"]
+
+    # controller_plugins: 控制器插件列表
+    # - 作用：使用的局部路径跟踪控制器
+    # - 影响：不同控制器有不同的跟踪策略
+    # - 调优：DWB 控制器适合大多数场景，可尝试 "FollowPath" 或 "TEB"
     controller_plugins: ["FollowPath"]
 
+    # ===== 进度检查器配置 =====
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
+      # required_movement_radius: 要求的最小移动半径（米）
+      # - 作用：在指定时间内机器人必须移动超过此距离
+      # - 影响：值越小越容易触发失败，值越大越宽松
+      # - 修改：设为 0.1，需要有实际移动才算"有进展"
       required_movement_radius: 0.1
-      movement_time_allowance: 20.0
 
+      # movement_time_allowance: 移动时间限制（秒）
+      # - 作用：在此时长内必须移动 required_movement_radius 距离
+      # - 影响：值越大越宽松，允许更长的卡住时间
+      # - 修改：设为 15.0 秒，在狭窄空间卡住时更快触发 backup 恢复行为
+      movement_time_allowance: 30.0
+
+    # ===== 目标检查器配置 =====
     general_goal_checker:
+      # stateful: 是否保持状态
+      # - 作用：True 时记住之前的状态，False 时每次重新检查
+      # - 影响：True 时更稳定，False 时更灵活
+      # - 调优：一般保持 True，不需要修改
       stateful: True
+
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      # xy_goal_tolerance: 位置容差（米）
+      # - 作用：到达目标点时的位置误差容忍范围
+      # - 影响：值越大越容易到达，但精度下降；值越小精度高但可能无法到达
+      # - 调优：一般 0.2-0.5 米，高精度要求时减小到 0.1-0.2
+      # - 注意：过小会导致机器人原地转圈无法到达
+      xy_goal_tolerance: 0.35
 
+      # yaw_goal_tolerance: 角度容差（弧度）
+      # - 作用：到达目标点时的角度误差容忍范围
+      # - 影响：值越大越容易到达，但朝向精度下降
+      # - 调优：一般 0.2-0.5 弧度（约 11-29 度），高精度要求时减小
+      # - 注意：过小会导致机器人无法对准目标朝向
+      yaw_goal_tolerance: 0.35
+
+    # ===== MPPI 控制器配置 =====
+    # MPPI (Model Predictive Path Integral) 控制器
+    # 优势：
+    # - 更适合阿克曼底盘，不会产生原地旋转指令
+    # - 在狭窄空间中表现更好
+    # - 支持倒车和复杂机动
     FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: True
-      min_vel_x: -0.1
-      min_vel_y: 0.0
-      max_vel_x: 0.5
-      max_vel_y: 0.0
-      max_vel_theta: 1.0
-      min_speed_xy: 0.0
-      max_speed_xy: 0.5
-      min_speed_theta: 0.0
-      acc_lim_x: 1.0
-      acc_lim_y: 0.0
-      acc_lim_theta: 3.0
-      decel_lim_x: -1.0
-      decel_lim_theta: -3.0
-      vx_samples: 20
-      vy_samples: 5
-      vtheta_samples: 20
-      sim_time: 2.0
-      linear_granularity: 0.05
-      angular_granularity: 0.025
-      transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
-      trans_stopped_velocity: 0.05
-      short_circuit_trajectory_evaluation: True
-      stateful: True
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "ObstacleFootprint", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
-      ObstacleFootprint.scale: 1.0
-      PathAlign.scale: 32.0
-      PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
-      GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
-      RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.0
-      Oscillation.scale: 10.0
+      plugin: "nav2_mppi_controller::MPPIController"
+      
+      # ===== 基本参数 =====
+      time_steps: 56                    # 预测步数（越多越远，但计算量越大）
+      model_dt: 0.1                     # 模型时间步长（秒），必须 >= 1/controller_frequency
+      batch_size: 2000                  # 采样轨迹数量（越多越好，但计算量越大）
+      vx_std: 0.15                      # 线速度采样标准差（减小以提高稳定性）
+      vy_std: 0.0                       # 横向速度采样标准差（阿克曼底盘设为0）
+      wz_std: 0.2                       # 角速度采样标准差（减小以减少转向抖动）
+      vx_max: 0.4                       # 最大前进速度 (m/s)
+      vx_min: -0.3                      # 最小速度（负值允许倒车）
+      vy_max: 0.0                       # 最大横向速度（阿克曼底盘设为0）
+      wz_max: 0.8                       # 最大角速度 (rad/s)
+      
+      # ===== 迭代参数 =====
+      iteration_count: 1                # 每次控制循环的迭代次数
+      prune_distance: 1.7               # 路径修剪距离（米）
+      transform_tolerance: 0.1          # TF 变换容差（秒）
+      temperature: 0.3                  # 温度参数（越小越贪婪，越大越随机）
+      gamma: 0.015                      # 折扣因子
+      motion_model: "Ackermann"         # 运动模型：Ackermann 适合阿克曼底盘
+      visualize: true                   # 是否可视化轨迹
+      regenerate_noises: true           # 是否重新生成噪声
+      
+      # ===== 阿克曼运动学参数 =====
+      AckermannConstraints:
+        min_turning_r: 0.34             # 最小转弯半径（米），= 轴距0.40m / tan(50°) ≈ 0.34m
 
+      # ===== 轨迹可视化 =====
+      TrajectoryVisualizer:
+        trajectory_step: 5              # 可视化轨迹点间隔
+        time_step: 3                    # 可视化时间步间隔
+
+      # ===== 评估器（Critics）配置 =====
+      critics: ["ConstraintCritic", "ObstaclesCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
+      
+      # 约束评估器：确保轨迹满足运动学约束
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      
+      # 障碍物评估器：避免碰撞
+      ObstaclesCritic:
+        enabled: true
+        cost_power: 1
+        repulsion_weight: 1.5           # 排斥力权重
+        critical_weight: 20.0           # 关键碰撞权重
+        consider_footprint: true        # 使用完整足迹检测碰撞（重要！）
+        collision_cost: 10000.0         # 碰撞代价
+        collision_margin_distance: 0.1  # 碰撞边距（米）
+        near_goal_distance: 0.5         # 接近目标时的距离阈值
+        inflation_layer_name: "inflation_layer"
+      
+      # 目标评估器：接近目标点
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4      # 开始考虑目标的距离阈值
+      
+      # 目标角度评估器：对准目标方向
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.4      # 减小阈值，更接近目标时才考虑目标角度
+      
+      # 路径对齐评估器：与路径对齐
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 3
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+      
+      # 路径跟随评估器：跟随全局路径
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      
+      # 路径角度评估器：与路径方向一致
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.4      # 减小阈值，更接近目标时才考虑角度
+        max_angle_to_furthest: 1.0      # 允许的最大偏离角度（弧度）
+        mode: 0                         # 0: 考虑前进和后退
+      
+      # 优先前进评估器：优先选择前进而非后退
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.4      # 减小阈值，更接近目标时才考虑方向偏好
+
+# ============================================================================
+# planner_server: 路径规划器服务器
+# ============================================================================
+# 功能：全局路径规划，计算从起点到终点的最优路径
+# 影响：路径质量直接影响导航效率和成功率
 planner_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: True  # 是否使用仿真时间
+
+    # expected_planner_frequency: 期望的规划频率（Hz）
+    # - 作用：规划器应该达到的运行频率
+    # - 影响：值越大响应越快，但计算压力越大
+    # - 调优：一般 10-20Hz，复杂环境可降低到 5-10Hz
     expected_planner_frequency: 20.0
+
+    # planner_plugins: 规划器插件列表
+    # - 作用：使用的全局路径规划算法
+    # - 影响：不同算法有不同的特点（速度、质量、适用场景）
+    # - 调优：NavFn 是经典的 Dijkstra/A* 规划器，简单快速
     planner_plugins: ["GridBased"]
 
+    # ===== NavFn 规划器配置 =====
+    # NavFn 是 Nav2 中经典的全局路径规划器
+    # 优点：简单、快速、稳定
+    # 缺点：不考虑机器人运动学约束（如转弯半径），路径可能不够平滑
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
+
+      # tolerance: 目标容差（米）
+      # - 作用：允许的目标点误差范围
+      # - 影响：值越大越容易找到路径，但终点可能不精确
+      # - 调优：一般 0.5-1.0 米
       tolerance: 0.5
-      use_astar: false
+
+      # use_astar: 是否使用 A* 算法
+      # - 作用：True 使用 A*（更快），False 使用 Dijkstra（更完整）
+      # - 影响：A* 通常更快但可能不是最优路径
+      # - 调优：一般设为 True
+      use_astar: true
+
+      # allow_unknown: 是否允许穿过未知区域
+      # - 作用：True 时可以规划穿过灰色（未知）区域的路径
+      # - 影响：True 更灵活但可能不安全
+      # - 调优：地图完整时设为 False，探索时设为 True
       allow_unknown: true
 
+# ============================================================================
+# behavior_server: 恢复行为服务器
+# ============================================================================
+# 功能：当导航失败时执行恢复行为（旋转、后退、等待等）
+# 影响：恢复行为帮助机器人摆脱卡住或失败的状态
 behavior_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: True  # 是否使用仿真时间
+
+    # costmap_topic: 代价地图话题名称
+    # - 作用：订阅局部代价地图用于恢复行为
+    # - 影响：必须与 local_costmap 发布的话题一致
+    # - 调优：一般保持默认值，不要修改
     costmap_topic: "local_costmap/costmap_raw"
+
+    # footprint_topic: 机器人轮廓话题名称
+    # - 作用：订阅机器人轮廓信息
+    # - 影响：用于碰撞检测
+    # - 调优：一般保持默认值，不要修改
     footprint_topic: "local_costmap/published_footprint"
+
+    # cycle_frequency: 行为循环频率（Hz）
+    # - 作用：恢复行为执行的频率
+    # - 影响：值越大响应越快但 CPU 占用越高
+    # - 调优：一般 5-10Hz，不需要太高
     cycle_frequency: 10.0
-    behavior_plugins: ["spin", "backup", "wait"]
-    spin:
-      plugin: "nav2_behaviors/Spin"
+
+    # behavior_plugins: 恢复行为插件列表（阿克曼底盘，无 spin）
+    behavior_plugins: ["backup", "wait"]
+
+    # ===== 后退行为配置 =====
     backup:
       plugin: "nav2_behaviors/BackUp"
+      speed_xy: 0.1           # 倒车速度（m/s），低速安全
+      speed_theta: 0.0        # 阿克曼底盘不能原地转向
+      time_allowance: 10.0    # 倒车最大时间（秒）
+
+    # ===== 等待行为配置 =====
     wait:
       plugin: "nav2_behaviors/Wait"
-    global_frame: "odom"
-    robot_base_frame: "base_link"
-    transform_tolerance: 0.1
 
+    # global_frame: 全局坐标系名称
+    # - 作用：恢复行为使用的坐标系
+    # - 影响：必须与 local_costmap 的 global_frame 一致
+    # - 调优：一般保持 "odom"，不要修改
+    global_frame: "odom"
+
+    # robot_base_frame: 机器人基座坐标系
+    # - 作用：指定机器人基座坐标系
+    # - 影响：必须与 URDF 一致
+    # - 调优：一般保持 "base_link"，不要修改
+    robot_base_frame: "base_link"
+
+    # transform_tolerance: TF 变换容差（秒）
+    # - 作用：允许的 TF 变换时间延迟
+    # - 影响：值越大对时间同步要求越宽松
+    # - 调优：一般 0.1-1.0，网络延迟大时可增大
+    transform_tolerance: 5.0
+
+# ============================================================================
+# local_costmap: 局部代价地图
+# ============================================================================
+# 功能：以机器人为中心的局部障碍物地图，用于局部路径规划和避障
+# 影响：直接影响局部路径跟踪和避障能力
 local_costmap:
   local_costmap:
     ros__parameters:
+      use_sim_time: True  # 是否使用仿真时间
+
+      # update_frequency: 更新频率（Hz）
+      # - 作用：代价地图更新的频率
+      # - 影响：值越大更新越快但计算量越大
+      # - 调优：一般 5-10Hz，高速机器人建议 10-20Hz
       update_frequency: 5.0
+
+      # publish_frequency: 发布频率（Hz）
+      # - 作用：发布代价地图的频率
+      # - 影响：值越大可视化更新越快但带宽占用越大
+      # - 调优：一般 1-5Hz，调试时可增大
       publish_frequency: 2.0
+
+      # global_frame: 全局坐标系名称
+      # - 作用：局部代价地图使用的全局坐标系
+      # - 影响：必须与里程计坐标系一致（通常是 "odom"）
+      # - 调优：一般保持 "odom"，不要修改
       global_frame: "odom"
+
+      # robot_base_frame: 机器人基座坐标系
+      # - 作用：指定机器人基座坐标系
+      # - 影响：必须与 URDF 一致
+      # - 调优：一般保持 "base_link"，不要修改
       robot_base_frame: "base_link"
-      use_sim_time: True
+
+      # transform_tolerance: TF 变换容差（秒）
+      # - 作用：允许的 TF 变换时间延迟
+      # - 影响：值越大对时间同步要求越宽松
+      # - 调优：一般 0.1-1.0，网络延迟大时可增大
+      transform_tolerance: 5.0
+
+      # rolling_window: 是否使用滚动窗口
+      # - 作用：True 时代价地图跟随机器人移动（滚动窗口）
+      # - 影响：True 时节省内存，False 时固定在地图坐标系
+      # - 调优：局部代价地图必须设为 True，不要修改
       rolling_window: true
+
+      # width/height: 代价地图尺寸（米）
+      # - 作用：局部代价地图的宽度和高度
+      # - 影响：值越大覆盖范围越大但计算量越大
+      # - 调优：一般 3-10 米，高速机器人建议 5-10 米
       width: 3
-      height: 3
+      height: 2
+
+      # resolution: 分辨率（米/像素）
+      # - 作用：每个像素代表的实际距离
+      # - 影响：值越小精度越高但计算量越大
+      # - 调优：一般 0.05-0.1 米，高精度要求时减小到 0.02-0.05
       resolution: 0.05
-      robot_radius: 0.22
+
+      # ===== 机器人形状配置 =====
+      # 使用 footprint（多边形足迹）替代 robot_radius，更精确地表示长方形机器人
+      # robot_radius: 机器人半径（米）- 已废弃，改用 footprint
+      # - 作用：用于计算机器人内切半径和碰撞检测（圆形近似）
+      # - 影响：值越大安全距离越大，但可能无法通过狭窄通道
+      # - 调优：根据机器人实际尺寸设置（一般 0.15-0.25 米）
+      # - 注意：必须小于 inflation_radius
+      # robot_radius: 0.18
+
+      # footprint: 机器人多边形足迹（相对于 base_link，单位：米）
+      # - 作用：精确定义机器人的形状，用于碰撞检测
+      # - 影响：比 robot_radius 更准确，特别是对于长方形机器人
+      # - 格式：[[x1,y1], [x2,y2], [x3,y3], [x4,y4]]，按逆时针顺序
+      # - 计算：机器人长 0.63m，宽 0.40m，base_link 为中心
+      #   - 前右：[0.315, 0.20]  (长度一半=0.315, 宽度一半=0.20)
+      #   - 前左：[0.315, -0.20]
+      #   - 后左：[-0.315, -0.20]
+      #   - 后右：[-0.315, 0.20]
+      # - 调优：根据 URDF 中的实际尺寸调整
+      # - 注意：如果设置了 footprint，robot_radius 将被忽略
+      footprint: "[[0.315, 0.20], [0.315, -0.20], [-0.315, -0.20], [-0.315, 0.20]]"
+
+      # plugins: 代价地图图层插件列表（按顺序执行）
+      # - 作用：不同图层提供不同的障碍物信息
+      # - 影响：图层顺序影响最终代价计算
+      # - 调优：一般 ["voxel_layer", "inflation_layer"]，可根据需要添加其他图层
       plugins: ["voxel_layer", "inflation_layer"]
 
+      # ===== 膨胀图层配置 =====
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        # cost_scaling_factor: 值越大衰减越快，不会把狭窄通道堵死
+        cost_scaling_factor: 10.0
+        # inflation_radius: 改回 0.08m，避免把垃圾桶和墙连成一片
+        inflation_radius: 0.08
 
+      # ===== 体素图层配置 =====
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
+        # enabled: 是否启用图层
+        # - 作用：True 时图层生效，False 时忽略
+        # - 影响：False 时无法检测障碍物
+        # - 调优：必须设为 True，不要修改
         enabled: True
-        publish_voxel_map: True
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
-        max_obstacle_height: 2.0
-        mark_threshold: 0
-        observation_sources: scan
-        scan:
-          topic: "/scan"
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
 
+        # publish_voxel_map: 是否发布体素地图
+        # - 作用：True 时发布 3D 体素地图用于可视化
+        # - 影响：True 时便于调试但增加计算和带宽
+        # - 调优：调试时设为 True，正常运行时可设为 False
+        publish_voxel_map: True
+        
+        # inf_is_valid: 是否将激光返回 inf（无穷远）视为有效
+        # - 作用：True 时，inf 数据用于清除障碍物
+        # - 影响：False 时，inf 数据被忽略，不会误清除真实障碍物
+        # - 修改：设为 False，防止清空 costmap 后立即认为前方无障碍
+        inf_is_valid: False
+
+        # origin_z: Z 轴原点（米）
+        # - 作用：体素地图的 Z 轴起始位置
+        # - 影响：通常设为 0.0（地面）
+        # - 调优：一般保持 0.0，不需要修改
+        origin_z: 0.0
+
+        # z_resolution: Z 轴分辨率（米）
+        # - 作用：体素在 Z 方向的高度
+        # - 影响：值越小精度越高但计算量越大
+        # - 调优：一般 0.05-0.1 米
+        z_resolution: 0.05
+
+        # z_voxels: Z 轴体素数量
+        # - 作用：体素地图在 Z 方向的高度（体素数）
+        # - 影响：值越大检测高度越大但计算量越大
+        # - 调优：一般 10-20，检测高度 = z_resolution × z_voxels
+        z_voxels: 16
+
+        # min_obstacle_height: 最小障碍物高度（米）
+        # - 作用：低于此高度的障碍物被忽略（过滤地面反射和低矮噪声）
+        # - 影响：2D激光雷达必须设为0，否则无法检测障碍物
+        # - 调优：2D激光雷达设为0.0，3D点云可设为0.1-0.2
+        min_obstacle_height: 0.0
+
+        # max_obstacle_height: 最大障碍物高度（米）
+        # - 作用：超过此高度的障碍物被忽略
+        # - 影响：值越大检测范围越大但可能误检测
+        # - 调优：根据机器人高度设置（一般 1.5-3.0 米）
+        max_obstacle_height: 1.5
+
+        # mark_threshold: 标记阈值
+        # - 作用：体素被标记为障碍物所需的最小占用数
+        # - 影响：值越大越不容易标记障碍物，但更稳定
+        # - 调优：设为0让任何检测都标记为障碍物
+        mark_threshold: 0
+
+        # observation_sources: 观测源列表
+        # - 作用：指定使用的传感器数据源
+        # - 影响：可添加多个传感器（如 scan, pointcloud）
+        # - 调优：根据实际传感器配置，一般 ["scan"]
+        observation_sources: scan
+
+        # ===== 激光雷达观测源配置 =====
+        scan:
+          # topic: 激光雷达话题名称
+          # - 作用：订阅的激光雷达数据话题
+          # - 影响：必须与激光雷达节点发布的话题一致
+          # - 修改：改用 /scan（原始数据），避免 scan_filter 增加延迟
+          #         这样清空 costmap 后能立即检测到障碍物
+          topic: "/scan"
+
+          # max_obstacle_height: 最大障碍物高度（米）
+          # - 作用：激光数据中超过此高度的点被忽略
+          # - 影响：与图层级别的 max_obstacle_height 配合使用
+          # - 调优：一般与图层级别保持一致
+          max_obstacle_height: 2.0
+
+          # clearing: 是否用于清除障碍物
+          # - 作用：True 时激光数据可用于清除已标记的障碍物
+          # - 影响：True 时地图更准确，False 时障碍物不会消失
+          # - 调优：必须设为 True，不要修改
+          clearing: True
+
+          # marking: 是否用于标记障碍物
+          # - 作用：True 时激光数据可用于标记障碍物
+          # - 影响：True 时能检测障碍物，False 时无法检测
+          # - 调优：必须设为 True，不要修改
+          marking: True
+
+          # data_type: 数据类型
+          # - 作用：指定传感器数据类型
+          # - 影响：必须与传感器实际类型一致
+          # - 调优：激光雷达为 "LaserScan"，点云为 "PointCloud2"
+          data_type: "LaserScan"
+
+          # raytrace_max_range: 光线追踪最大距离（米）
+          # - 作用：清除障碍物时的最大光线追踪距离
+          # - 影响：值越大清除范围越大但计算量越大
+          # - 调优：一般 2.0-5.0 米，根据激光雷达范围设置
+          raytrace_max_range: 3.0
+
+          # raytrace_min_range: 光线追踪最小距离（米）
+          # - 作用：清除障碍物时的最小光线追踪距离
+          # - 影响：通常设为 0.0
+          # - 调优：一般保持 0.0，不需要修改
+          raytrace_min_range: 0.0
+
+          # obstacle_max_range: 障碍物检测最大距离（米）
+          # - 作用：标记障碍物时的最大检测距离
+          # - 影响：值越大检测范围越大但可能不准确
+          # - 调优：一般 2.0-5.0 米，根据激光雷达精度设置
+          obstacle_max_range: 2.5
+
+          # obstacle_min_range: 障碍物检测最小距离（米）
+          # - 作用：标记障碍物时的最小检测距离
+          # - 影响：过滤掉太近的噪声（如机器人自身反射）
+          # - 调优：设为0.1允许检测近距离障碍物
+          obstacle_min_range: 0.1
+          
+          # sensor_frame: 传感器坐标系
+          # - 作用：指定激光雷达的 TF 坐标系名称
+          # - 修改：明确指定为 "lidar"，与 TF 一致
+          sensor_frame: "lidar"
+
+      # always_send_full_costmap: 是否总是发送完整代价地图
+      # - 作用：True 时每次更新都发送完整地图，False 时只发送变化部分
+      # - 影响：True 时带宽占用大但更可靠，False 时带宽小但可能丢失数据
+      # - 调优：一般保持 True，网络带宽充足时不需要修改
       always_send_full_costmap: True
 
+# ============================================================================
+# global_costmap: 全局代价地图
+# ============================================================================
+# 功能：覆盖整个地图的全局障碍物地图，用于全局路径规划
+# 影响：直接影响全局路径规划的质量和成功率
 global_costmap:
   global_costmap:
     ros__parameters:
+      use_sim_time: True  # 是否使用仿真时间
+
+      # update_frequency: 更新频率（Hz）
+      # - 作用：代价地图更新的频率
+      # - 影响：值越大更新越快但计算量越大
+      # - 调优：全局地图更新不需要太频繁，一般 0.5-2.0Hz
       update_frequency: 1.0
+
+      # publish_frequency: 发布频率（Hz）
+      # - 作用：发布代价地图的频率
+      # - 影响：值越大可视化更新越快但带宽占用越大
+      # - 调优：一般 0.5-2.0Hz，调试时可增大
       publish_frequency: 1.0
+
+      # global_frame: 全局坐标系名称
+      # - 作用：全局代价地图使用的坐标系（必须是 "map"）
+      # - 影响：必须与地图坐标系一致
+      # - 调优：必须保持 "map"，不要修改
       global_frame: "map"
+
+      # robot_base_frame: 机器人基座坐标系
+      # - 作用：指定机器人基座坐标系
+      # - 影响：必须与 URDF 一致
+      # - 调优：一般保持 "base_link"，不要修改
       robot_base_frame: "base_link"
-      use_sim_time: True
-      robot_radius: 0.22
+
+      # transform_tolerance: TF 变换容差（秒）
+      # - 作用：允许的 TF 变换时间延迟
+      # - 影响：值越大对时间同步要求越宽松
+      # - 调优：一般 0.1-1.0，网络延迟大时可增大
+      transform_tolerance: 5.0
+
+      # ===== 机器人形状配置 =====
+      # 使用 footprint（多边形足迹）替代 robot_radius，更精确地表示长方形机器人
+      # robot_radius: 机器人半径（米）- 已废弃，改用 footprint
+      # - 作用：用于计算机器人内切半径和碰撞检测（圆形近似）
+      # - 影响：值越大安全距离越大，但可能无法通过狭窄通道
+      # - 调优：根据机器人实际尺寸设置（一般 0.2-0.3 米）
+      # - 注意：全局地图的 robot_radius 可能略大于局部地图（考虑安全余量）
+      # robot_radius: 0.22
+
+      # footprint: 机器人多边形足迹（相对于 base_link，单位：米）
+      # - 作用：精确定义机器人的形状，用于碰撞检测
+      # - 影响：比 robot_radius 更准确，特别是对于长方形机器人
+      # - 格式：[[x1,y1], [x2,y2], [x3,y3], [x4,y4]]，按逆时针顺序
+      # - 计算：机器人长 0.63m，宽 0.40m，base_link 为中心
+      #   - 前右：[0.315, 0.20]  (长度一半=0.315, 宽度一半=0.20)
+      #   - 前左：[0.315, -0.20]
+      #   - 后左：[-0.315, -0.20]
+      #   - 后右：[-0.315, 0.20]
+      # - 调优：根据 URDF 中的实际尺寸调整
+      # - 注意：如果设置了 footprint，robot_radius 将被忽略
+      footprint: "[[0.315, 0.20], [0.315, -0.20], [-0.315, -0.20], [-0.315, 0.20]]"
+
+      # resolution: 分辨率（米/像素）
+      # - 作用：每个像素代表的实际距离
+      # - 影响：值越小精度越高但计算量和内存占用越大
+      # - 调优：必须与地图分辨率一致（一般 0.05 米），不要修改
       resolution: 0.05
+
+      # track_unknown_space: 是否跟踪未知区域
+      # - 作用：True 时将未知区域（灰色）视为可通行，False 时视为障碍物
+      # - 影响：True 时更灵活但可能不安全，False 时更安全但可能无法规划
+      # - 调优：地图完整时设为 False，地图不完整时设为 True
       track_unknown_space: false
+
+      # plugins: 代价地图图层插件列表（按顺序执行）
+      # - 作用：不同图层提供不同的障碍物信息
+      # - 影响：图层顺序影响最终代价计算（通常 static_layer 在最底层）
+      # - 调优：一般 ["static_layer", "obstacle_layer", "inflation_layer"]
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
 
+      # ===== 障碍物图层配置 =====
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
+        # enabled: 是否启用图层
+        # - 作用：True 时图层生效，False 时忽略
+        # - 影响：False 时无法检测动态障碍物
+        # - 调优：必须设为 True，不要修改
         enabled: True
-        observation_sources: scan
-        scan:
-          topic: "/scan"
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
 
+        # min_obstacle_height: 最小障碍物高度（米）
+        # - 作用：低于此高度的障碍物被忽略（过滤地面反射）
+        # - 影响：值越大过滤越多，但可能漏检低矮障碍物
+        # - 调优：设为 0.1-0.2 米可过滤大部分地面噪声
+        min_obstacle_height: 0.25
+
+        # max_obstacle_height: 最大障碍物高度（米）
+        # - 作用：超过此高度的障碍物被忽略
+        # - 影响：值越大检测范围越大但可能误检测高处反射
+        max_obstacle_height: 2.0
+
+        # observation_sources: 观测源列表
+        # - 作用：指定使用的传感器数据源
+        # - 影响：可添加多个传感器（如 scan, pointcloud）
+        # - 调优：根据实际传感器配置，一般 ["scan"]
+        observation_sources: scan
+
+        # ===== 激光雷达观测源配置 =====
+        scan:
+          # topic: 激光雷达话题名称
+          # - 作用：订阅的激光雷达数据话题
+          # - 影响：必须与激光雷达节点发布的话题一致
+          # - 调优：根据实际激光雷达话题修改（如 "/scan"）
+          topic: "/scan"
+
+          # min_obstacle_height: 最小障碍物高度（米）
+          # - 作用：低于此高度的激光点被忽略
+          min_obstacle_height: 0.15
+
+          # max_obstacle_height: 最大障碍物高度（米）
+          # - 作用：激光数据中超过此高度的点被忽略
+          # - 影响：值越大检测范围越大但可能误检测
+          # - 调优：根据机器人高度设置（一般 1.5-3.0 米）
+          max_obstacle_height: 1.5
+
+          # clearing: 是否用于清除障碍物
+          # - 作用：True 时激光数据可用于清除已标记的障碍物
+          # - 影响：True 时地图更准确，False 时障碍物不会消失
+          # - 调优：必须设为 True，不要修改
+          clearing: True
+
+          # marking: 是否用于标记障碍物
+          # - 作用：True 时激光数据可用于标记障碍物
+          # - 影响：True 时能检测障碍物，False 时无法检测
+          # - 调优：必须设为 True，不要修改
+          marking: True
+
+          # data_type: 数据类型
+          # - 作用：指定传感器数据类型
+          # - 影响：必须与传感器实际类型一致
+          # - 调优：激光雷达为 "LaserScan"，点云为 "PointCloud2"
+          data_type: "LaserScan"
+
+          # raytrace_max_range: 光线追踪最大距离（米）
+          # - 作用：清除障碍物时的最大光线追踪距离
+          # - 影响：值越大清除范围越大但计算量越大
+          # - 调优：一般 2.0-5.0 米，根据激光雷达范围设置
+          raytrace_max_range: 3.0
+
+          # raytrace_min_range: 光线追踪最小距离（米）
+          # - 作用：清除障碍物时的最小光线追踪距离
+          # - 影响：通常设为 0.0
+          # - 调优：一般保持 0.0，不需要修改
+          raytrace_min_range: 0.0
+
+          # obstacle_max_range: 障碍物检测最大距离（米）
+          # - 作用：标记障碍物时的最大检测距离
+          # - 影响：值越大检测范围越大但可能不准确
+          # - 调优：一般 2.0-5.0 米，根据激光雷达精度设置
+          obstacle_max_range: 2.5
+
+          # obstacle_min_range: 障碍物检测最小距离（米）
+          # - 作用：标记障碍物时的最小检测距离
+          # - 影响：过滤掉太近的噪声（如机器人自身、地面反射）
+          # - 调优：设为机器人半径左右，过滤近距离噪声
+          obstacle_min_range: 0.35
+
+      # ===== 静态图层配置 =====
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
+        # map_subscribe_transient_local: 是否使用瞬态本地订阅
+        # - 作用：True 时使用瞬态本地 QoS，确保不丢失地图数据
+        # - 影响：True 时更可靠，False 时可能丢失地图更新
+        # - 调优：必须设为 True，不要修改
         map_subscribe_transient_local: True
 
+      # ===== 膨胀图层配置 =====
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        # cost_scaling_factor: 值越大衰减越快
+        cost_scaling_factor: 10.0
+        # inflation_radius: 改回 0.08m，避免把障碍物连成一片
+        inflation_radius: 0.08
 
+      # always_send_full_costmap: 是否总是发送完整代价地图
+      # - 作用：True 时每次更新都发送完整地图，False 时只发送变化部分
+      # - 影响：True 时带宽占用大但更可靠，False 时带宽小但可能丢失数据
+      # - 调优：一般保持 True，网络带宽充足时不需要修改
       always_send_full_costmap: True
